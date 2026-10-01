@@ -1,0 +1,6 @@
+{
+  "name": "Kupony - Family Coupon Vault",
+  "description": "Bright, friendly family coupon vault supporting multiple families, partial deductions, bilingual Hebrew and English, store filters, and barcode generation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

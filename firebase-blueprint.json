@@ -1,0 +1,110 @@
+{
+  "entities": {
+    "userProfile": {
+      "title": "UserProfile",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "avatarColor": { "type": "string" }
+      },
+      "required": ["id", "name", "email"]
+    },
+    "family": {
+      "title": "Family",
+      "description": "Family vault that owns coupons and has members",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "emoji": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "memberIds": { "type": "array" }
+      },
+      "required": ["id", "name", "ownerId", "memberIds"]
+    },
+    "coupon": {
+      "title": "Coupon",
+      "description": "Coupon voucher belonging to a family",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "familyId": { "type": "string" },
+        "title": { "type": "string" },
+        "storeName": { "type": "string" },
+        "whereToUse": { "type": "string" },
+        "code": { "type": "string" },
+        "pin": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "barcodeType": { "type": "string" },
+        "initialValue": { "type": "number" },
+        "currentValue": { "type": "number" },
+        "currency": { "type": "string" },
+        "expirationDate": { "type": "string" },
+        "category": { "type": "string" },
+        "terms": { "type": "string" },
+        "createdBy": { "type": "string" },
+        "createdByName": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "familyId", "title", "storeName", "initialValue", "currentValue", "currency", "createdBy"]
+    },
+    "couponUsage": {
+      "title": "CouponUsage",
+      "description": "Usage history record of a deduction on a coupon",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "couponId": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "amountUsed": { "type": "number" },
+        "remainingAfter": { "type": "number" },
+        "usedAt": { "type": "string" },
+        "note": { "type": "string" }
+      },
+      "required": ["id", "couponId", "userId", "userName", "amountUsed", "remainingAfter", "usedAt"]
+    },
+    "familyInvite": {
+      "title": "FamilyInvite",
+      "description": "Invitation sent to join a family",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "familyId": { "type": "string" },
+        "familyName": { "type": "string" },
+        "invitedEmail": { "type": "string" },
+        "invitedBy": { "type": "string" },
+        "invitedByName": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "familyId", "invitedEmail", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "userProfile",
+      "description": "User profile documents"
+    },
+    "/families/{familyId}": {
+      "schema": "family",
+      "description": "Family vault root documents"
+    },
+    "/families/{familyId}/coupons/{couponId}": {
+      "schema": "coupon",
+      "description": "Coupons belonging to a family"
+    },
+    "/families/{familyId}/coupons/{couponId}/usages/{usageId}": {
+      "schema": "couponUsage",
+      "description": "Usage deduction records of a coupon"
+    },
+    "/invites/{inviteId}": {
+      "schema": "familyInvite",
+      "description": "Invitations to join families"
+    }
+  }
+}

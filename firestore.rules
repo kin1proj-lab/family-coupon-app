@@ -1,0 +1,44 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if true;
+      allow write: if isSignedIn() || request.auth == null;
+    }
+
+    // Families collection
+    match /families/{familyId} {
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if true;
+
+      // Coupons subcollection
+      match /coupons/{couponId} {
+        allow read: if true;
+        allow create, update, delete: if true;
+
+        // Usages subcollection
+        match /usages/{usageId} {
+          allow read: if true;
+          allow create, update, delete: if true;
+        }
+      }
+    }
+
+    // Invites collection
+    match /invites/{inviteId} {
+      allow read: if true;
+      allow create, update, delete: if true;
+    }
+  }
+}

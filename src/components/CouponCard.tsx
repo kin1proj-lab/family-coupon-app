@@ -10,6 +10,7 @@ import {
   Barcode,
   AlertTriangle,
   Image as ImageIcon,
+  Zap,
 } from 'lucide-react';
 import { Coupon, Language } from '../types';
 import { getTranslation } from '../i18n/translations';
@@ -19,6 +20,7 @@ interface CouponCardProps {
   lang: Language;
   onSelect: (coupon: Coupon) => void;
   onRedeem: (coupon: Coupon) => void;
+  onFastFullRedeem?: (coupon: Coupon) => void;
 }
 
 export const CouponCard: React.FC<CouponCardProps> = ({
@@ -26,6 +28,7 @@ export const CouponCard: React.FC<CouponCardProps> = ({
   lang,
   onSelect,
   onRedeem,
+  onFastFullRedeem,
 }) => {
   const isHe = lang === 'he';
   const t = getTranslation(lang);
@@ -255,23 +258,44 @@ export const CouponCard: React.FC<CouponCardProps> = ({
           </div>
         )}
 
-        {/* Action Button */}
+        {/* Action Buttons: Partial Deduct & Fast Full Use */}
         <div className="pt-1 flex items-center gap-2">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onRedeem(coupon);
-            }}
-            disabled={isFullyUsed}
-            className={`w-full py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
-              !isFullyUsed
-                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-sm hover:shadow-md'
-                : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>{t.useCoupon}</span>
-          </button>
+          {isFullyUsed ? (
+            <div className="w-full py-2.5 rounded-xl font-bold text-xs bg-slate-100 text-slate-400 text-center flex items-center justify-center gap-1.5 border border-slate-200">
+              <Check className="w-4 h-4 text-slate-400" />
+              <span>{t.fullyUsed}</span>
+            </div>
+          ) : (
+            <>
+              {/* Partial Deduction (Opens popup) */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRedeem(coupon);
+                }}
+                className="flex-1 py-2.5 px-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all cursor-pointer border border-slate-200"
+                title={isHe ? 'ניצול סכום חלקי (מחשבון)' : 'Deduct partial balance'}
+              >
+                <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                <span>{isHe ? 'ניצול חלקי' : 'Deduct'}</span>
+              </button>
+
+              {/* Fast Full Use Button (No popup, instant!) */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (onFastFullRedeem) {
+                    onFastFullRedeem(coupon);
+                  }
+                }}
+                className="flex-1 py-2.5 px-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-xs hover:shadow-md transition-all cursor-pointer"
+                title={isHe ? 'סיום מהיר: סימון כנוצל במלואו ללא פופאפ' : 'Fast: Mark fully used immediately without popup'}
+              >
+                <Zap className="w-3.5 h-3.5 fill-white text-white" />
+                <span>{isHe ? 'נוצל מלא ⚡' : 'Mark Used ⚡'}</span>
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

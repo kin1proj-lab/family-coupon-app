@@ -8,6 +8,7 @@ import {
   Crown,
   Zap,
   Cloud,
+  LogOut,
 } from 'lucide-react';
 import { Family, Language, User } from '../types';
 import { getTranslation } from '../i18n/translations';
@@ -16,12 +17,11 @@ interface HeaderProps {
   families: Family[];
   activeFamily: Family;
   currentUser: User;
-  allUsers: User[];
   lang: Language;
   cloudSyncActive?: boolean;
   onLanguageChange: (lang: Language) => void;
   onSelectFamily: (familyId: string) => void;
-  onSwitchUser: (userId: string) => void;
+  onLogout: () => void;
   onOpenAddCoupon: () => void;
   onOpenQuickAdd: () => void;
   onOpenManageFamilies: () => void;
@@ -31,12 +31,11 @@ export const Header: React.FC<HeaderProps> = ({
   families,
   activeFamily,
   currentUser,
-  allUsers,
   lang,
   cloudSyncActive = true,
   onLanguageChange,
   onSelectFamily,
-  onSwitchUser,
+  onLogout,
   onOpenAddCoupon,
   onOpenQuickAdd,
   onOpenManageFamilies,
@@ -45,7 +44,6 @@ export const Header: React.FC<HeaderProps> = ({
   const t = getTranslation(lang);
 
   const [familyDropdownOpen, setFamilyDropdownOpen] = useState(false);
-  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
 
   const isOwner = activeFamily.ownerId === currentUser.id;
 
@@ -173,77 +171,41 @@ export const Header: React.FC<HeaderProps> = ({
               <span>{isHe ? 'English' : 'עברית'}</span>
             </button>
 
-            {/* User Switcher (For testing permissions) */}
-            <div className="relative">
-              <button
-                onClick={() => setUserDropdownOpen(!userDropdownOpen)}
-                className="flex items-center gap-2 p-1.5 sm:px-3 sm:py-1.5 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 transition-colors cursor-pointer"
-                title={t.switchUser}
+            {/* Authenticated User Badge & Logout */}
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <div
+                className="flex items-center gap-2 p-1.5 sm:px-3 sm:py-1.5 rounded-2xl border border-slate-200 bg-white shadow-2xs"
+                title={currentUser.email}
               >
-                <div className={`w-7 h-7 rounded-xl ${currentUser.avatarColor} text-white text-xs font-bold flex items-center justify-center`}>
+                <div
+                  className={`w-7 h-7 rounded-xl ${currentUser.avatarColor || 'bg-gradient-to-tr from-blue-600 to-indigo-600'} text-white text-xs font-bold flex items-center justify-center shrink-0`}
+                >
                   {currentUser.name.slice(0, 1).toUpperCase()}
                 </div>
                 <div className="hidden md:block text-left rtl:text-right">
                   <div className="text-xs font-bold text-slate-800 flex items-center gap-1">
-                    <span>{currentUser.name}</span>
-                    {isOwner && <Crown className="w-2.5 h-2.5 text-blue-600" />}
+                    <span className="truncate max-w-[100px]">{currentUser.name}</span>
+                    {isOwner && (
+                      <span title={isHe ? 'בעל המשפחה' : 'Family Owner'}>
+                        <Crown className="w-3 h-3 text-amber-500 fill-amber-500" />
+                      </span>
+                    )}
                   </div>
-                  <div className="text-[10px] text-slate-400 truncate max-w-[100px]">
+                  <div className="text-[10px] text-slate-400 truncate max-w-[110px]">
                     {currentUser.email}
                   </div>
                 </div>
-                <ChevronDown className="w-3.5 h-3.5 text-slate-400 hidden sm:block" />
+              </div>
+
+              {/* Logout Button */}
+              <button
+                onClick={onLogout}
+                className="flex items-center gap-1 px-2.5 sm:px-3 py-2 rounded-2xl border border-slate-200 bg-white hover:bg-rose-50 hover:border-rose-200 text-slate-600 hover:text-rose-600 text-xs font-bold transition-all cursor-pointer shadow-2xs"
+                title={isHe ? 'התנתקות מהחשבון' : 'Sign Out'}
+              >
+                <LogOut className="w-3.5 h-3.5 text-rose-500" />
+                <span className="hidden sm:inline">{isHe ? 'התנתק' : 'Logout'}</span>
               </button>
-
-              {userDropdownOpen && (
-                <>
-                  <div
-                    className="fixed inset-0 z-10"
-                    onClick={() => setUserDropdownOpen(false)}
-                  />
-                  <div
-                    className="absolute top-full mt-2 w-60 bg-white rounded-2xl shadow-xl border border-slate-200 p-2 z-20 animate-in fade-in zoom-in-95 ltr:right-0 rtl:left-0"
-                    dir={isHe ? 'rtl' : 'ltr'}
-                  >
-                    <div className="px-3 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                      {t.switchUser}
-                    </div>
-
-                    <div className="space-y-1">
-                      {allUsers.map((u) => {
-                        const isCurrent = u.id === currentUser.id;
-                        return (
-                          <button
-                            key={u.id}
-                            onClick={() => {
-                              onSwitchUser(u.id);
-                              setUserDropdownOpen(false);
-                            }}
-                            className={`w-full flex items-center justify-between p-2 rounded-xl text-xs transition-colors cursor-pointer ${
-                              isCurrent
-                                ? 'bg-blue-50 text-blue-900 font-bold'
-                                : 'text-slate-700 hover:bg-slate-50'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2">
-                              <div className={`w-6 h-6 rounded-lg ${u.avatarColor} text-white text-[10px] font-bold flex items-center justify-center`}>
-                                {u.name.slice(0, 1)}
-                              </div>
-                              <div className="text-left rtl:text-right">
-                                <div className="font-semibold">{u.name}</div>
-                                <div className="text-[10px] text-slate-400">{u.email}</div>
-                              </div>
-                            </div>
-                            {isCurrent && (
-                              <span className="w-2 h-2 rounded-full bg-blue-600" />
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </>
-              )}
             </div>
 
             {/* Quick Add Button (⚡) */}

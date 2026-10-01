@@ -17,6 +17,7 @@ import {
   Trash2,
   Image as ImageIcon,
   Maximize2,
+  Zap,
 } from 'lucide-react';
 import { Coupon, Language } from '../types';
 import { getTranslation } from '../i18n/translations';
@@ -28,6 +29,7 @@ interface CouponDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   onOpenRedeem: (coupon: Coupon) => void;
+  onFastFullRedeem?: (coupon: Coupon) => void;
   onOpenEdit: (coupon: Coupon) => void;
   onDelete: (couponId: string) => void;
   onUndoUsage: (couponId: string, usageId: string) => void;
@@ -39,6 +41,7 @@ export const CouponDetailModal: React.FC<CouponDetailModalProps> = ({
   isOpen,
   onClose,
   onOpenRedeem,
+  onFastFullRedeem,
   onOpenEdit,
   onDelete,
   onUndoUsage,
@@ -123,21 +126,37 @@ export const CouponDetailModal: React.FC<CouponDetailModalProps> = ({
             </div>
 
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => {
-                  onClose();
-                  onOpenRedeem(coupon);
-                }}
-                disabled={coupon.currentValue <= 0}
-                className={`px-5 py-2.5 rounded-xl font-bold text-sm shadow-md transition-all flex items-center gap-2 cursor-pointer ${
-                  coupon.currentValue > 0
-                    ? 'bg-white text-blue-900 hover:bg-sky-50 hover:scale-[1.02]'
-                    : 'bg-white/40 text-white/70 cursor-not-allowed'
-                }`}
-              >
-                <Sparkles className="w-4 h-4 text-blue-600" />
-                <span>{t.useCoupon}</span>
-              </button>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={() => {
+                    onClose();
+                    onOpenRedeem(coupon);
+                  }}
+                  disabled={coupon.currentValue <= 0}
+                  className={`px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm shadow-md transition-all flex items-center gap-2 cursor-pointer ${
+                    coupon.currentValue > 0
+                      ? 'bg-white text-blue-900 hover:bg-sky-50 hover:scale-[1.02]'
+                      : 'bg-white/40 text-white/70 cursor-not-allowed'
+                  }`}
+                >
+                  <Sparkles className="w-4 h-4 text-blue-600" />
+                  <span>{isHe ? 'ניצול חלקי...' : 'Deduct Partial...'}</span>
+                </button>
+
+                {coupon.currentValue > 0 && onFastFullRedeem && (
+                  <button
+                    onClick={() => {
+                      onFastFullRedeem(coupon);
+                      onClose();
+                    }}
+                    className="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm shadow-md transition-all flex items-center gap-2 cursor-pointer bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white hover:scale-[1.02]"
+                    title={isHe ? 'סימון כנוצל במלואו ללא פופאפ' : 'Mark fully used immediately without popup'}
+                  >
+                    <Zap className="w-4 h-4 fill-white text-white" />
+                    <span>{isHe ? 'סיום מהיר (נוצל מלא ⚡)' : 'Fast Mark Used ⚡'}</span>
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>

@@ -6,39 +6,38 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    function isSignedIn() {
-      return request.auth != null;
+    // Top-level coupons collection
+    match /coupons/{couponId} {
+      allow read, write: if true;
     }
 
-    // Users collection
-    match /users/{userId} {
-      allow read: if true;
-      allow write: if isSignedIn() || request.auth == null;
-    }
-
-    // Families collection
+    // Top-level families collection
     match /families/{familyId} {
-      allow read: if true;
-      allow create: if true;
-      allow update, delete: if true;
+      allow read, write: if true;
 
-      // Coupons subcollection
+      // In case subcollections are used
       match /coupons/{couponId} {
-        allow read: if true;
-        allow create, update, delete: if true;
+        allow read, write: if true;
 
-        // Usages subcollection
         match /usages/{usageId} {
-          allow read: if true;
-          allow create, update, delete: if true;
+          allow read, write: if true;
         }
       }
     }
 
-    // Invites collection
+    // Top-level users collection
+    match /users/{userId} {
+      allow read, write: if true;
+    }
+
+    // Top-level invites collection
     match /invites/{inviteId} {
-      allow read: if true;
-      allow create, update, delete: if true;
+      allow read, write: if true;
+    }
+
+    // System connection test collection
+    match /system/{docId} {
+      allow read, write: if true;
     }
   }
 }

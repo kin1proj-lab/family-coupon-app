@@ -94,6 +94,10 @@
       "schema": "family",
       "description": "Family vault root documents"
     },
+    "/coupons/{couponId}": {
+      "schema": "coupon",
+      "description": "Coupons belonging to a family"
+    },
     "/families/{familyId}/coupons/{couponId}": {
       "schema": "coupon",
       "description": "Coupons belonging to a family"

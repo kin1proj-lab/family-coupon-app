@@ -10,6 +10,10 @@ import {
   Home,
   Shield,
   Send,
+  Edit2,
+  Trash2,
+  AlertTriangle,
+  Save,
 } from 'lucide-react';
 import { Family, FamilyInvite, Language, User } from '../types';
 import { getTranslation } from '../i18n/translations';
@@ -24,6 +28,8 @@ interface FamilyManageModalProps {
   onClose: () => void;
   onSelectFamily: (familyId: string) => void;
   onCreateFamily: (name: string, emoji: string) => void;
+  onEditFamily: (familyId: string, name: string, emoji: string) => void;
+  onDeleteFamily: (familyId: string) => void;
   onSendInvite: (familyId: string, email: string) => void;
   onAcceptInvite: (inviteId: string) => void;
   onDeclineInvite: (inviteId: string) => void;
@@ -39,6 +45,8 @@ export const FamilyManageModal: React.FC<FamilyManageModalProps> = ({
   onClose,
   onSelectFamily,
   onCreateFamily,
+  onEditFamily,
+  onDeleteFamily,
   onSendInvite,
   onAcceptInvite,
   onDeclineInvite,
@@ -52,7 +60,15 @@ export const FamilyManageModal: React.FC<FamilyManageModalProps> = ({
   const [newFamilyEmoji, setNewFamilyEmoji] = useState('🏡');
   const [inviteSuccessMsg, setInviteSuccessMsg] = useState('');
 
-  if (!isOpen) return null;
+  // Editing state for active family
+  const [isEditingActive, setIsEditingActive] = useState(false);
+  const [editName, setEditName] = useState(activeFamily?.name || '');
+  const [editEmoji, setEditEmoji] = useState(activeFamily?.emoji || '🏡');
+
+  // Deletion confirm state
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  if (!isOpen || !activeFamily) return null;
 
   const isOwnerOfActiveFamily = activeFamily.ownerId === currentUser.id;
 
@@ -78,6 +94,20 @@ export const FamilyManageModal: React.FC<FamilyManageModalProps> = ({
     onCreateFamily(newFamilyName.trim(), newFamilyEmoji);
     setNewFamilyName('');
     setShowCreateForm(false);
+    onClose();
+  };
+
+  const handleSaveEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editName.trim()) return;
+    onEditFamily(activeFamily.id, editName.trim(), editEmoji);
+    setIsEditingActive(false);
+  };
+
+  const handleConfirmDelete = () => {
+    onDeleteFamily(activeFamily.id);
+    setShowDeleteConfirm(false);
+    onClose();
   };
 
   return (
@@ -93,7 +123,15 @@ export const FamilyManageModal: React.FC<FamilyManageModalProps> = ({
               {activeFamily.emoji || '🏡'}
             </div>
             <div>
-              <h2 className="text-xl font-bold">{t.myFamilies}</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl font-bold">{activeFamily.name}</h2>
+                {isOwnerOfActiveFamily && (
+                  <span className="text-[11px] bg-amber-400 text-amber-950 px-2 py-0.5 rounded-full font-extrabold flex items-center gap-1">
+                    <Crown className="w-3 h-3 fill-amber-950" />
+                    <span>{isHe ? 'בעל המשפחה' : 'Owner'}</span>
+                  </span>
+                )}
+              </div>
               <p className="text-sky-100 text-xs">
                 {isHe ? 'ניהול משפחות, חברים והרשאות' : 'Manage families, members & permissions'}
               </p>
@@ -146,6 +184,117 @@ export const FamilyManageModal: React.FC<FamilyManageModalProps> = ({
             </div>
           )}
 
+          {/* Owner Family Management Actions (Edit & Delete) */}
+          {isOwnerOfActiveFamily && (
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                  <Crown className="w-4 h-4 text-amber-500" />
+                  <span>{isHe ? 'הגדרות בעל המשפחה' : 'Family Owner Controls'}</span>
+                </span>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditName(activeFamily.name);
+                      setEditEmoji(activeFamily.emoji || '🏡');
+                      setIsEditingActive(!isEditingActive);
+                      setShowDeleteConfirm(false);
+                    }}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold transition-all cursor-pointer"
+                  >
+                    <Edit2 className="w-3.5 h-3.5 text-blue-600" />
+                    <span>{isHe ? 'עריכת שם וסמל' : 'Edit Name & Emoji'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowDeleteConfirm(!showDeleteConfirm);
+                      setIsEditingActive(false);
+                    }}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold transition-all cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>{isHe ? 'מחיקת משפחה' : 'Delete Family'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Edit Family Form */}
+              {isEditingActive && (
+                <form
+                  onSubmit={handleSaveEdit}
+                  className="p-3 bg-white rounded-xl border border-blue-200 space-y-2 animate-in fade-in"
+                >
+                  <label className="block text-xs font-bold text-slate-700">
+                    {isHe ? 'עדכון שם וסמליל המשפחה:' : 'Update Family Details:'}
+                  </label>
+                  <div className="flex gap-2">
+                    <select
+                      value={editEmoji}
+                      onChange={(e) => setEditEmoji(e.target.value)}
+                      className="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-lg"
+                    >
+                      <option value="🏡">🏡</option>
+                      <option value="❤️">❤️</option>
+                      <option value="🌟">🌟</option>
+                      <option value="🛒">🛒</option>
+                      <option value="🏖️">🏖️</option>
+                      <option value="👑">👑</option>
+                    </select>
+                    <input
+                      type="text"
+                      required
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      className="flex-1 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-blue-500"
+                    />
+                    <button
+                      type="submit"
+                      className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      <span>{isHe ? 'שמור' : 'Save'}</span>
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* Delete Family Confirmation Alert */}
+              {showDeleteConfirm && (
+                <div className="p-4 bg-rose-50 rounded-xl border border-rose-300 space-y-3 animate-in fade-in">
+                  <div className="flex items-start gap-2.5 text-rose-800 text-xs font-medium">
+                    <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
+                    <p className="leading-relaxed">
+                      {isHe
+                        ? `האם אתה בטוח שברצונך למחוק לצמיתות את משפחת "${activeFamily.name}"? פעולה זו תמחק את כל הקופונים, היתרות וההיסטוריה של המשפחה ללא יכולת שחזור.`
+                        : `Are you sure you want to permanently delete "${activeFamily.name}"? All coupons and balance records will be deleted permanently.`}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setShowDeleteConfirm(false)}
+                      className="px-3.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold cursor-pointer"
+                    >
+                      {isHe ? 'ביטול' : 'Cancel'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleConfirmDelete}
+                      className="px-4 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>{isHe ? 'אישור מחיקה סופית' : 'Yes, Delete Family'}</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Families Switcher */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
@@ -181,6 +330,7 @@ export const FamilyManageModal: React.FC<FamilyManageModalProps> = ({
                     <option value="🌟">🌟</option>
                     <option value="🛒">🛒</option>
                     <option value="🏖️">🏖️</option>
+                    <option value="👑">👑</option>
                   </select>
                   <input
                     type="text"
@@ -207,7 +357,12 @@ export const FamilyManageModal: React.FC<FamilyManageModalProps> = ({
                 return (
                   <div
                     key={fam.id}
-                    onClick={() => onSelectFamily(fam.id)}
+                    onClick={() => {
+                      onSelectFamily(fam.id);
+                      setIsEditingActive(false);
+                      setShowDeleteConfirm(false);
+                      onClose();
+                    }}
                     className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${
                       isActive
                         ? 'bg-blue-50 border-blue-400 ring-2 ring-blue-400/20 shadow-xs'
@@ -223,7 +378,7 @@ export const FamilyManageModal: React.FC<FamilyManageModalProps> = ({
                           <span>{fam.name}</span>
                           {isOwner && (
                             <span title="Owner">
-                              <Crown className="w-3.5 h-3.5 text-blue-600" />
+                              <Crown className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
                             </span>
                           )}
                         </div>
@@ -291,7 +446,7 @@ export const FamilyManageModal: React.FC<FamilyManageModalProps> = ({
                             : 'bg-slate-100 text-slate-700'
                         }`}
                       >
-                        {isMemberOwner && <Crown className="w-3 h-3 text-blue-600" />}
+                        {isMemberOwner && <Crown className="w-3 h-3 text-amber-500 fill-amber-500" />}
                         {isMemberOwner ? t.owner : t.member}
                       </span>
                     </div>

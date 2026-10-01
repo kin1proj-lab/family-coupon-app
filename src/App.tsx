@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   Zap,
 } from 'lucide-react';
+import confetti from 'canvas-confetti';
 import {
   Coupon,
   Family,
@@ -15,7 +16,11 @@ import {
   User,
 } from './types';
 import { StorageService } from './services/storage';
-import { CloudStorageService, testFirestoreConnection } from './services/firebase';
+import {
+  CloudStorageService,
+  testFirestoreConnection,
+  AuthService,
+} from './services/firebase';
 import { getTranslation } from './i18n/translations';
 import { Header } from './components/Header';
 import { FilterBar } from './components/FilterBar';
@@ -25,15 +30,16 @@ import { RedeemModal } from './components/RedeemModal';
 import { AddEditCouponModal } from './components/AddEditCouponModal';
 import { QuickAddModal } from './components/QuickAddModal';
 import { FamilyManageModal } from './components/FamilyManageModal';
+import { LoginPage } from './components/LoginPage';
 
 export default function App() {
   const [lang, setLang] = useState<Language>('he');
   const t = getTranslation(lang);
   const isHe = lang === 'he';
 
-  // Core data states
-  const [users, setUsers] = useState<User[]>([]);
+  // Auth & Core data states
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [authInitialized, setAuthInitialized] = useState(false);
   const [families, setFamilies] = useState<Family[]>([]);
   const [activeFamilyId, setActiveFamilyId] = useState<string>('');
   const [coupons, setCoupons] = useState<Coupon[]>([]);
@@ -47,35 +53,40 @@ export default function App() {
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [isManageFamiliesOpen, setIsManageFamiliesOpen] = useState(false);
 
-  // Default Filter: ONLY show activated coupons that can be used!
+  // Default Filter: ONLY show usable coupons
   const [filters, setFilters] = useState<FilterState>({
     search: '',
     store: 'all',
     category: 'all',
     expiration: 'all',
     valueRange: 'all',
-    usageStatus: 'usable', // DEFAULT: Usable & Active coupons!
+    usageStatus: 'usable',
     sortBy: 'expiry_asc',
   });
 
-  // Initialize and load from storage and Firestore
+  // 1. Listen to Firebase Authentication state
   useEffect(() => {
-    // 1. Load initial cache
-    const loadedUsers = StorageService.getUsers();
-    const loadedCurrentUser = StorageService.getCurrentUser();
+    const unsubAuth = AuthService.onAuthStateChange((user) => {
+      setCurrentUser(user);
+      setAuthInitialized(true);
+    });
+    return () => unsubAuth();
+  }, []);
+
+  // 2. Initialize and load from local storage & Firestore real-time sync
+  useEffect(() => {
+    // Load cached families & coupons
     const loadedFamilies = StorageService.getFamilies();
     const loadedActiveFamId = StorageService.getActiveFamilyId();
     const loadedCoupons = StorageService.getCoupons();
     const loadedInvites = StorageService.getInvites();
 
-    setUsers(loadedUsers);
-    setCurrentUser(loadedCurrentUser);
     setFamilies(loadedFamilies);
     setActiveFamilyId(loadedActiveFamId);
     setCoupons(loadedCoupons);
     setInvites(loadedInvites);
 
-    // 2. Connect to Cloud Firestore & set up real-time sync
+    // Test Firestore connection & seed if newly provisioned
     testFirestoreConnection().then((connected) => {
       if (connected) {
         CloudStorageService.seedInitialDataIfNeeded();
@@ -110,10 +121,52 @@ export default function App() {
     document.documentElement.lang = lang;
   }, [lang, isHe]);
 
-  // Active Family object
+  // AUTHORIZATION: Only show families that the current user belongs to or owns
+  const visibleFamilies = useMemo(() => {
+    if (!currentUser) return [];
+    return families.filter((f) => {
+      // 1. Owner of family
+      if (f.ownerId === currentUser.id) return true;
+      // 2. Member by ID
+      if (f.members.some((m) => m.userId === currentUser.id)) return true;
+      // 3. Member by matching Email (case-insensitive)
+      if (
+        currentUser.email &&
+        f.members.some(
+          (m) => m.email && m.email.toLowerCase() === currentUser.email.toLowerCase()
+        )
+      ) {
+        return true;
+      }
+      return false;
+    });
+  }, [families, currentUser]);
+
+  // Ensure active family is valid and belongs to the authorized visibleFamilies
+  useEffect(() => {
+    if (!currentUser) return;
+    if (visibleFamilies.length > 0) {
+      if (!visibleFamilies.some((f) => f.id === activeFamilyId)) {
+        setActiveFamilyId(visibleFamilies[0].id);
+      }
+    }
+  }, [visibleFamilies, activeFamilyId, currentUser]);
+
+  // If a logged-in user has no families yet (e.g., new Google account), auto-create their first family vault!
+  useEffect(() => {
+    if (currentUser && authInitialized && visibleFamilies.length === 0) {
+      const famName = isHe
+        ? `המשפחה של ${currentUser.name}`
+        : `${currentUser.name}'s Family`;
+      handleCreateFamily(famName, '🏡');
+    }
+  }, [currentUser, authInitialized, visibleFamilies.length, isHe]);
+
+  // Active Family object (strictly within authorized visibleFamilies)
   const activeFamily = useMemo(() => {
-    return families.find((f) => f.id === activeFamilyId) || families[0] || null;
-  }, [families, activeFamilyId]);
+    if (visibleFamilies.length === 0) return null;
+    return visibleFamilies.find((f) => f.id === activeFamilyId) || visibleFamilies[0];
+  }, [visibleFamilies, activeFamilyId]);
 
   // Coupons for active family
   const familyCoupons = useMemo(() => {
@@ -139,12 +192,11 @@ export default function App() {
       .filter((c) => {
         // Search
         if (filters.search) {
-          const q = filters.search.toLowerCase();
-          const matchTitle = c.title.toLowerCase().includes(q);
-          const matchStore = c.storeName.toLowerCase().includes(q);
-          const matchCode = c.code ? c.code.toLowerCase().includes(q) : false;
-          const matchWhere = c.whereToUse.toLowerCase().includes(q);
-          if (!matchTitle && !matchStore && !matchCode && !matchWhere) return false;
+          const s = filters.search.toLowerCase();
+          const matchTitle = c.title.toLowerCase().includes(s);
+          const matchStore = c.storeName.toLowerCase().includes(s);
+          const matchCode = c.code ? c.code.toLowerCase().includes(s) : false;
+          if (!matchTitle && !matchStore && !matchCode) return false;
         }
 
         // Store
@@ -158,50 +210,39 @@ export default function App() {
         }
 
         // Value Range
-        if (filters.valueRange === 'under100' && c.currentValue >= 100) return false;
-        if (
-          filters.valueRange === '100to300' &&
-          (c.currentValue < 100 || c.currentValue > 300)
-        )
-          return false;
-        if (filters.valueRange === 'over300' && c.currentValue <= 300) return false;
+        if (filters.valueRange !== 'all') {
+          if (filters.valueRange === 'under100' && c.currentValue >= 100) return false;
+          if (
+            filters.valueRange === '100to300' &&
+            (c.currentValue < 100 || c.currentValue > 300)
+          )
+            return false;
+          if (filters.valueRange === 'over300' && c.currentValue <= 300) return false;
+        }
 
         // Expiration
-        if (filters.expiration !== 'all') {
-          if (!c.expirationDate) {
-            if (filters.expiration === 'expired') return false;
-            if (filters.expiration === 'expiring_soon') return false;
-          } else {
-            const exp = new Date(c.expirationDate);
-            exp.setHours(0, 0, 0, 0);
-            const daysDiff = Math.ceil(
-              (exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
-            );
-            if (filters.expiration === 'expired' && daysDiff >= 0) return false;
-            if (
-              filters.expiration === 'expiring_soon' &&
-              (daysDiff < 0 || daysDiff > 7)
-            )
-              return false;
-            if (filters.expiration === 'active' && daysDiff < 0) return false;
-          }
+        if (c.expirationDate) {
+          const exp = new Date(c.expirationDate);
+          exp.setHours(0, 0, 0, 0);
+          const diffDays = Math.ceil((exp.getTime() - today.getTime()) / (1000 * 3600 * 24));
+
+          if (filters.expiration === 'active' && diffDays < 0) return false;
+          if (filters.expiration === 'expiring_soon' && (diffDays < 0 || diffDays > 7))
+            return false;
+          if (filters.expiration === 'expired' && diffDays >= 0) return false;
+        } else if (filters.expiration === 'expired') {
+          return false;
         }
 
-        // Usage Status (Default is 'usable' = currentValue > 0 AND not expired)
-        if (filters.usageStatus === 'usable') {
-          if (c.currentValue <= 0) return false;
-          if (c.expirationDate) {
-            const exp = new Date(c.expirationDate);
-            exp.setHours(0, 0, 0, 0);
-            if (exp.getTime() < today.getTime()) return false;
-          }
-        } else if (filters.usageStatus === 'unused') {
-          if (c.currentValue !== c.initialValue) return false;
-        } else if (filters.usageStatus === 'partially_used') {
-          if (c.currentValue <= 0 || c.currentValue >= c.initialValue) return false;
-        } else if (filters.usageStatus === 'fully_used') {
-          if (c.currentValue > 0) return false;
-        }
+        // Usage Status
+        if (filters.usageStatus === 'usable' && c.currentValue <= 0) return false;
+        if (filters.usageStatus === 'unused' && c.currentValue !== c.initialValue) return false;
+        if (
+          filters.usageStatus === 'partially_used' &&
+          (c.currentValue === c.initialValue || c.currentValue <= 0)
+        )
+          return false;
+        if (filters.usageStatus === 'fully_used' && c.currentValue > 0) return false;
 
         return true;
       })
@@ -223,7 +264,7 @@ export default function App() {
           return a.currentValue - b.currentValue;
         }
         if (filters.sortBy === 'created_desc') {
-          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+          return b.createdAt.localeCompare(a.createdAt);
         }
         if (filters.sortBy === 'store_asc') {
           return a.storeName.localeCompare(b.storeName);
@@ -232,7 +273,7 @@ export default function App() {
       });
   }, [familyCoupons, filters]);
 
-  // Statistics
+  // Overall family balance statistics
   const stats = useMemo(() => {
     let totalAvailable = 0;
     let expiringCount = 0;
@@ -241,11 +282,11 @@ export default function App() {
 
     familyCoupons.forEach((c) => {
       totalAvailable += c.currentValue;
-      if (c.expirationDate && c.currentValue > 0) {
+      if (c.currentValue > 0 && c.expirationDate) {
         const exp = new Date(c.expirationDate);
         exp.setHours(0, 0, 0, 0);
-        const days = Math.ceil((exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-        if (days >= 0 && days <= 7) {
+        const diffDays = Math.ceil((exp.getTime() - today.getTime()) / (1000 * 3600 * 24));
+        if (diffDays >= 0 && diffDays <= 7) {
           expiringCount++;
         }
       }
@@ -258,27 +299,73 @@ export default function App() {
     };
   }, [familyCoupons]);
 
-  // Handle Switch Family
+  // Handle Logout
+  const handleLogout = async () => {
+    await AuthService.signOut();
+    setCurrentUser(null);
+  };
+
+  // Select active family
   const handleSelectFamily = (familyId: string) => {
     setActiveFamilyId(familyId);
     StorageService.setActiveFamilyId(familyId);
   };
 
-  // Handle Switch Current User (Demo auth)
-  const handleSwitchUser = (userId: string) => {
-    StorageService.setCurrentUser(userId);
-    const u = users.find((x) => x.id === userId) || users[0];
-    setCurrentUser(u);
+  // Handle FAST FULL USE (⚡ Mark as fully used without popup!)
+  const handleFastFullRedeem = (coupon: Coupon) => {
+    if (!currentUser) return;
+    if (coupon.currentValue <= 0) return;
+
+    const amountUsed = coupon.currentValue;
+    const usageEntry = {
+      id: `usage-${Date.now()}`,
+      couponId: coupon.id,
+      userId: currentUser.id,
+      userName: currentUser.name,
+      amountUsed,
+      remainingAfter: 0,
+      usedAt: new Date().toISOString(),
+      note: isHe ? 'שימוש מלא מהיר ⚡' : 'Fast Full Redemption ⚡',
+    };
+
+    const updatedCoupon: Coupon = {
+      ...coupon,
+      currentValue: 0,
+      history: [usageEntry, ...(coupon.history || [])],
+    };
+
+    const updatedList = coupons.map((c) =>
+      c.id === coupon.id ? updatedCoupon : c
+    );
+
+    setCoupons(updatedList);
+    StorageService.saveCoupons(updatedList);
+    CloudStorageService.saveCoupon(updatedCoupon);
+
+    // CRITICAL: Close any open popups/modals immediately!
+    setSelectedCoupon(null);
+    setRedeemingCoupon(null);
+
+    // Celebratory Confetti
+    try {
+      confetti({
+        particleCount: 50,
+        spread: 60,
+        origin: { y: 0.75 },
+      });
+    } catch {
+      // Ignore if confetti is unavailable
+    }
   };
 
-  // Handle Partial or Full Deduction
+  // Handle Partial or Full Deduction via Deduction Modal
   const handleRedeemCoupon = (
     couponId: string,
     amount: number,
     userId: string,
     note?: string
   ) => {
-    const redeemingUser = users.find((u) => u.id === userId) || currentUser!;
+    const redeemingUser = currentUser!;
     let targetUpdatedCoupon: Coupon | null = null;
 
     const updated = coupons.map((c) => {
@@ -309,7 +396,6 @@ export default function App() {
       CloudStorageService.saveCoupon(targetUpdatedCoupon);
     }
 
-    // Close both the redeem popup and detail popup after approval
     setRedeemingCoupon(null);
     setSelectedCoupon(null);
   };
@@ -368,19 +454,20 @@ export default function App() {
     // Sync to Cloud Firestore
     CloudStorageService.saveCoupon(savedCoupon);
 
-    // Always close modals after saving
     setIsAddModalOpen(false);
     setIsQuickAddOpen(false);
     setEditingCoupon(null);
+    setSelectedCoupon(null);
   };
 
-  // Handle Delete
+  // Handle Delete Coupon
   const handleDeleteCoupon = (couponId: string) => {
     const updated = coupons.filter((c) => c.id !== couponId);
     setCoupons(updated);
     StorageService.saveCoupons(updated);
-    // Delete in Cloud Firestore
     CloudStorageService.deleteCoupon(couponId);
+    setSelectedCoupon(null);
+    setRedeemingCoupon(null);
   };
 
   // Handle Create Family
@@ -406,11 +493,55 @@ export default function App() {
     const updated = [...families, newFam];
     setFamilies(updated);
     StorageService.saveFamilies(updated);
-    // Sync to Cloud Firestore
     CloudStorageService.saveFamily(newFam);
 
     setActiveFamilyId(newFam.id);
     StorageService.setActiveFamilyId(newFam.id);
+    setIsManageFamiliesOpen(false);
+  };
+
+  // Handle Edit Family (Owner Feature)
+  const handleEditFamily = (familyId: string, name: string, emoji: string) => {
+    const updated = families.map((f) => {
+      if (f.id !== familyId) return f;
+      return { ...f, name, emoji };
+    });
+    setFamilies(updated);
+    StorageService.saveFamilies(updated);
+    const target = updated.find((f) => f.id === familyId);
+    if (target) {
+      CloudStorageService.saveFamily(target);
+    }
+  };
+
+  // Handle Delete Family (Owner Feature)
+  const handleDeleteFamily = (familyId: string) => {
+    // 1. Delete coupons belonging to this family locally & from Cloud
+    const remainingCoupons = coupons.filter((c) => c.familyId !== familyId);
+    setCoupons(remainingCoupons);
+    StorageService.saveCoupons(remainingCoupons);
+
+    // 2. Delete family document
+    const remainingFamilies = families.filter((f) => f.id !== familyId);
+    setFamilies(remainingFamilies);
+    StorageService.saveFamilies(remainingFamilies);
+
+    // 3. Delete from Cloud Firestore
+    CloudStorageService.deleteFamily(familyId);
+
+    // 4. Select next authorized family
+    const nextFam = remainingFamilies.find(
+      (f) =>
+        f.ownerId === currentUser?.id ||
+        f.members.some((m) => m.userId === currentUser?.id)
+    );
+    if (nextFam) {
+      setActiveFamilyId(nextFam.id);
+      StorageService.setActiveFamilyId(nextFam.id);
+    } else if (currentUser) {
+      const newFamName = isHe ? `המשפחה של ${currentUser.name}` : `${currentUser.name}'s Family`;
+      handleCreateFamily(newFamName, '🏡');
+    }
   };
 
   // Handle Send Invite
@@ -430,7 +561,6 @@ export default function App() {
     const updated = [...invites, newInvite];
     setInvites(updated);
     StorageService.saveInvites(updated);
-    // Sync to Cloud Firestore
     CloudStorageService.saveInvite(newInvite);
   };
 
@@ -471,7 +601,6 @@ export default function App() {
     setInvites(updatedInvites);
     StorageService.saveInvites(updatedInvites);
 
-    // Sync to Cloud Firestore
     if (targetUpdatedFamily) {
       CloudStorageService.saveFamily(targetUpdatedFamily);
     }
@@ -491,16 +620,30 @@ export default function App() {
     );
     setInvites(updatedInvites);
     StorageService.saveInvites(updatedInvites);
-    // Sync to Cloud Firestore
     CloudStorageService.saveInvite(updatedInvite);
   };
 
-  if (!currentUser || !activeFamily) {
+  // Show login page if user is not authenticated
+  if (!currentUser) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-sky-50">
-        <div className="animate-spin text-blue-600">
-          <Ticket className="w-8 h-8" />
+      <LoginPage
+        lang={lang}
+        onLanguageChange={setLang}
+        onSuccess={(u) => setCurrentUser(u)}
+      />
+    );
+  }
+
+  // Loading state if family is still initializing
+  if (!activeFamily) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 text-white gap-3 p-4">
+        <div className="animate-spin text-blue-400">
+          <Ticket className="w-10 h-10" />
         </div>
+        <p className="text-sm text-slate-300 font-medium">
+          {isHe ? 'טוען את הכספת המשפחתית שלך...' : 'Loading your family vault...'}
+        </p>
       </div>
     );
   }
@@ -510,16 +653,15 @@ export default function App() {
       className="min-h-screen bg-slate-50/70 text-slate-800 pb-20 selection:bg-blue-200"
       dir={isHe ? 'rtl' : 'ltr'}
     >
-      {/* Header */}
+      {/* Header with authenticated user badge and Logout button */}
       <Header
-        families={families}
+        families={visibleFamilies}
         activeFamily={activeFamily}
         currentUser={currentUser}
-        allUsers={users}
         lang={lang}
         onLanguageChange={setLang}
         onSelectFamily={handleSelectFamily}
-        onSwitchUser={handleSwitchUser}
+        onLogout={handleLogout}
         onOpenAddCoupon={() => setIsAddModalOpen(true)}
         onOpenQuickAdd={() => setIsQuickAddOpen(true)}
         onOpenManageFamilies={() => setIsManageFamiliesOpen(true)}
@@ -527,9 +669,8 @@ export default function App() {
 
       {/* Main Container */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
-        {/* Banner with Family Summary & Value Stats (Blue/Indigo palette) */}
+        {/* Banner with Family Summary & Value Stats */}
         <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-blue-600 via-sky-600 to-indigo-600 text-white p-6 sm:p-8 shadow-lg shadow-blue-500/15">
-          {/* Subtle background glow */}
           <div className="absolute -right-10 -bottom-10 w-64 h-64 bg-white/10 rounded-full blur-2xl pointer-events-none" />
           <div className="absolute top-0 right-1/4 w-32 h-32 bg-sky-300/20 rounded-full blur-xl pointer-events-none" />
 
@@ -548,7 +689,7 @@ export default function App() {
               </h2>
               <p className="text-sky-100 text-sm mt-1 max-w-xl">
                 {isHe
-                  ? 'שתפו קופונים עם כל המשפחה, עדכנו ניצול חלקי בזמן אמת, והציגו ברקוד או תמונה ישירות לקופאי/ת!'
+                  ? 'שתפו קופונים עם כל המשפחה, עדכנו ניצול חלקי או מלא בזמן אמת, והציגו ברקוד או תמונה ישירות לקופאי/ת!'
                   : 'Share coupons across your family, record partial deductions, and scan barcodes or images directly at the cashier!'}
               </p>
             </div>
@@ -616,7 +757,7 @@ export default function App() {
           lang={lang}
         />
 
-        {/* Coupons Grid */}
+        {/* Coupons Grid with Fast Full Use and Partial Deduction */}
         {displayedCoupons.length === 0 ? (
           <div className="p-12 text-center bg-white rounded-3xl border border-slate-200/80 shadow-xs space-y-3">
             <div className="w-16 h-16 rounded-2xl bg-sky-50 text-blue-600 flex items-center justify-center mx-auto">
@@ -652,13 +793,14 @@ export default function App() {
                 lang={lang}
                 onSelect={setSelectedCoupon}
                 onRedeem={setRedeemingCoupon}
+                onFastFullRedeem={handleFastFullRedeem}
               />
             ))}
           </div>
         )}
       </main>
 
-      {/* Detail Modal */}
+      {/* Detail Modal with Fast Full Use and Partial Deduction */}
       {selectedCoupon && (
         <CouponDetailModal
           coupon={selectedCoupon}
@@ -666,13 +808,14 @@ export default function App() {
           isOpen={!!selectedCoupon}
           onClose={() => setSelectedCoupon(null)}
           onOpenRedeem={(c) => setRedeemingCoupon(c)}
+          onFastFullRedeem={handleFastFullRedeem}
           onOpenEdit={(c) => setEditingCoupon(c)}
           onDelete={handleDeleteCoupon}
           onUndoUsage={handleUndoUsage}
         />
       )}
 
-      {/* Redeem Modal (Full / Partial deduction with calculation and fixed scroll) */}
+      {/* Redeem Modal (Full / Partial deduction with calculation) */}
       {redeemingCoupon && (
         <RedeemModal
           coupon={redeemingCoupon}
@@ -701,7 +844,7 @@ export default function App() {
         />
       )}
 
-      {/* Quick Add Fast Coupon Modal (Store, Value, Image) */}
+      {/* Quick Add Fast Coupon Modal */}
       {isQuickAddOpen && (
         <QuickAddModal
           existingCoupons={coupons}
@@ -714,10 +857,10 @@ export default function App() {
         />
       )}
 
-      {/* Family Manage Modal */}
+      {/* Family Manage Modal with Edit and Delete options for Owner */}
       {isManageFamiliesOpen && (
         <FamilyManageModal
-          families={families}
+          families={visibleFamilies}
           activeFamily={activeFamily}
           currentUser={currentUser}
           invites={invites}
@@ -726,6 +869,8 @@ export default function App() {
           onClose={() => setIsManageFamiliesOpen(false)}
           onSelectFamily={handleSelectFamily}
           onCreateFamily={handleCreateFamily}
+          onEditFamily={handleEditFamily}
+          onDeleteFamily={handleDeleteFamily}
           onSendInvite={handleSendInvite}
           onAcceptInvite={handleAcceptInvite}
           onDeclineInvite={handleDeclineInvite}

@@ -1,5 +1,15 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import {
+  getAuth,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+  updateProfile,
+  User as FirebaseUser,
+} from 'firebase/auth';
 import {
   getFirestore,
   doc,
@@ -11,14 +21,20 @@ import {
   deleteDoc,
   onSnapshot,
   getDocFromServer,
+  query,
+  where,
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { Coupon, Family, FamilyInvite, User } from '../types';
-import { DEFAULT_USERS, DEFAULT_FAMILIES, DEFAULT_COUPONS } from './storage';
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
+
+const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({
+  prompt: 'select_account',
+});
 
 export enum OperationType {
   CREATE = 'create',
@@ -73,7 +89,6 @@ export async function testFirestoreConnection(): Promise<boolean> {
       console.warn('Firestore client is offline or initializing.');
       return false;
     }
-    // Connected to server (even if document not found, connection is live)
     return true;
   }
 }
@@ -86,29 +101,129 @@ const COLLECTIONS = {
   INVITES: 'invites',
 };
 
-export const CloudStorageService = {
-  // Initialize Cloud Database with seed data if empty
-  async seedInitialDataIfNeeded(): Promise<void> {
-    try {
-      const familiesSnapshot = await getDocs(collection(db, COLLECTIONS.FAMILIES));
-      if (familiesSnapshot.empty) {
-        // Seed default families
-        for (const fam of DEFAULT_FAMILIES) {
-          await setDoc(doc(db, COLLECTIONS.FAMILIES, fam.id), fam);
+// Generate consistent avatar color based on name/email
+export function getAvatarColor(identifier: string): string {
+  const colors = [
+    'from-blue-500 to-indigo-600',
+    'from-emerald-500 to-teal-600',
+    'from-purple-500 to-pink-600',
+    'from-amber-500 to-orange-600',
+    'from-rose-500 to-red-600',
+    'from-cyan-500 to-blue-600',
+    'from-violet-500 to-purple-600',
+  ];
+  let hash = 0;
+  for (let i = 0; i < identifier.length; i++) {
+    hash = identifier.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return colors[Math.abs(hash) % colors.length];
+}
+
+export const AuthService = {
+  // Listen to Firebase Auth state
+  onAuthStateChange(callback: (user: User | null) => void) {
+    return onAuthStateChanged(auth, async (fbUser) => {
+      if (fbUser) {
+        const user: User = {
+          id: fbUser.uid,
+          name: fbUser.displayName || fbUser.email?.split('@')[0] || 'User',
+          email: fbUser.email || '',
+          avatarColor: getAvatarColor(fbUser.email || fbUser.uid),
+        };
+        // Upsert user profile to Firestore
+        try {
+          await setDoc(
+            doc(db, COLLECTIONS.USERS, user.id),
+            {
+              id: user.id,
+              name: user.name,
+              email: user.email,
+              avatarColor: user.avatarColor,
+              lastLoginAt: new Date().toISOString(),
+            },
+            { merge: true }
+          );
+        } catch (e) {
+          console.warn('User profile sync error:', e);
         }
-        // Seed default coupons
-        for (const coup of DEFAULT_COUPONS) {
-          await setDoc(doc(db, COLLECTIONS.COUPONS, coup.id), coup);
-        }
-        // Seed default users
-        for (const u of DEFAULT_USERS) {
-          await setDoc(doc(db, COLLECTIONS.USERS, u.id), u);
-        }
-        console.log('Firestore seeded successfully with initial family coupon data.');
+        callback(user);
+      } else {
+        callback(null);
       }
-    } catch (err) {
-      console.error('Seed error:', err);
+    });
+  },
+
+  // Sign in with Google (Gmail)
+  async signInWithGoogle(): Promise<User> {
+    const result = await signInWithPopup(auth, googleProvider);
+    const fbUser = result.user;
+    const user: User = {
+      id: fbUser.uid,
+      name: fbUser.displayName || fbUser.email?.split('@')[0] || 'User',
+      email: fbUser.email || '',
+      avatarColor: getAvatarColor(fbUser.email || fbUser.uid),
+    };
+    await setDoc(
+      doc(db, COLLECTIONS.USERS, user.id),
+      {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        avatarColor: user.avatarColor,
+        lastLoginAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
+    return user;
+  },
+
+  // Sign in with Email and Password
+  async signInWithEmail(email: string, pass: string): Promise<User> {
+    const cred = await signInWithEmailAndPassword(auth, email.trim(), pass);
+    const fbUser = cred.user;
+    const user: User = {
+      id: fbUser.uid,
+      name: fbUser.displayName || fbUser.email?.split('@')[0] || 'User',
+      email: fbUser.email || '',
+      avatarColor: getAvatarColor(fbUser.email || fbUser.uid),
+    };
+    return user;
+  },
+
+  // Register with Email, Password & Name
+  async signUpWithEmail(email: string, pass: string, name: string): Promise<User> {
+    const cred = await createUserWithEmailAndPassword(auth, email.trim(), pass);
+    const fbUser = cred.user;
+    if (name.trim()) {
+      await updateProfile(fbUser, { displayName: name.trim() });
     }
+    const user: User = {
+      id: fbUser.uid,
+      name: name.trim() || fbUser.email?.split('@')[0] || 'User',
+      email: fbUser.email || '',
+      avatarColor: getAvatarColor(fbUser.email || fbUser.uid),
+    };
+    await setDoc(doc(db, COLLECTIONS.USERS, user.id), {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      avatarColor: user.avatarColor,
+      createdAt: new Date().toISOString(),
+      lastLoginAt: new Date().toISOString(),
+    });
+    return user;
+  },
+
+  // Sign Out
+  async signOut(): Promise<void> {
+    await signOut(auth);
+  },
+};
+
+export const CloudStorageService = {
+  // Clean database initialization (no mock data seeded)
+  async seedInitialDataIfNeeded(): Promise<void> {
+    // No mock seed
   },
 
   // Real-time listener for coupons
@@ -121,12 +236,10 @@ export const CloudStorageService = {
         snapshot.forEach((docSnap) => {
           list.push(docSnap.data() as Coupon);
         });
-        if (list.length > 0) {
-          onUpdate(list);
-        }
+        onUpdate(list);
       },
       (error) => {
-        handleFirestoreError(error, OperationType.LIST, COLLECTIONS.COUPONS);
+        console.error('Coupons subscribe error:', error);
       }
     );
   },
@@ -141,12 +254,10 @@ export const CloudStorageService = {
         snapshot.forEach((docSnap) => {
           list.push(docSnap.data() as Family);
         });
-        if (list.length > 0) {
-          onUpdate(list);
-        }
+        onUpdate(list);
       },
       (error) => {
-        handleFirestoreError(error, OperationType.LIST, COLLECTIONS.FAMILIES);
+        console.error('Families subscribe error:', error);
       }
     );
   },
@@ -164,7 +275,7 @@ export const CloudStorageService = {
         onUpdate(list);
       },
       (error) => {
-        handleFirestoreError(error, OperationType.LIST, COLLECTIONS.INVITES);
+        console.error('Invites subscribe error:', error);
       }
     );
   },
@@ -196,6 +307,22 @@ export const CloudStorageService = {
       await setDoc(doc(db, COLLECTIONS.FAMILIES, family.id), family);
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, path);
+    }
+  },
+
+  // Delete a family AND all its coupons from Cloud Firestore
+  async deleteFamily(familyId: string): Promise<void> {
+    try {
+      // 1. Delete all coupons belonging to this family
+      const q = query(collection(db, COLLECTIONS.COUPONS), where('familyId', '==', familyId));
+      const snaps = await getDocs(q);
+      for (const d of snaps.docs) {
+        await deleteDoc(doc(db, COLLECTIONS.COUPONS, d.id));
+      }
+      // 2. Delete family document
+      await deleteDoc(doc(db, COLLECTIONS.FAMILIES, familyId));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `${COLLECTIONS.FAMILIES}/${familyId}`);
     }
   },
 

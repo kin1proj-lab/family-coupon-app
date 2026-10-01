@@ -1,8 +1,15 @@
 @import "tailwindcss";
 
 @layer base {
+  html,
   body {
+    overflow-x: hidden;
+    max-width: 100vw;
     font-family: 'Rubik', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  }
+  #root {
+    overflow-x: hidden;
+    max-width: 100vw;
   }
 }
 

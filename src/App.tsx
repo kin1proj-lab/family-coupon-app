@@ -31,6 +31,7 @@ import { AddEditCouponModal } from './components/AddEditCouponModal';
 import { QuickAddModal } from './components/QuickAddModal';
 import { FamilyManageModal } from './components/FamilyManageModal';
 import { LoginPage } from './components/LoginPage';
+import { OnboardingNoFamilyScreen } from './components/OnboardingNoFamilyScreen';
 
 export default function App() {
   const [lang, setLang] = useState<Language>('he');
@@ -151,16 +152,6 @@ export default function App() {
       }
     }
   }, [visibleFamilies, activeFamilyId, currentUser]);
-
-  // If a logged-in user has no families yet (e.g., new Google account), auto-create their first family vault!
-  useEffect(() => {
-    if (currentUser && authInitialized && visibleFamilies.length === 0) {
-      const famName = isHe
-        ? `המשפחה של ${currentUser.name}`
-        : `${currentUser.name}'s Family`;
-      handleCreateFamily(famName, '🏡');
-    }
-  }, [currentUser, authInitialized, visibleFamilies.length, isHe]);
 
   // Active Family object (strictly within authorized visibleFamilies)
   const activeFamily = useMemo(() => {
@@ -400,13 +391,16 @@ export default function App() {
     setSelectedCoupon(null);
   };
 
-  // Handle Undo Usage
+  // Handle Undo Usage (Only for actions performed by currentUser!)
   const handleUndoUsage = (couponId: string, usageId: string) => {
+    if (!currentUser) return;
     let targetUpdatedCoupon: Coupon | null = null;
     const updated = coupons.map((c) => {
       if (c.id !== couponId) return c;
       const targetUsage = c.history.find((h) => h.id === usageId);
-      if (!targetUsage) return c;
+      // Strictly allow reverting actions done by ME only
+      if (!targetUsage || targetUsage.userId !== currentUser.id) return c;
+
       const restoredBalance = Math.min(
         c.initialValue,
         c.currentValue + targetUsage.amountUsed
@@ -529,7 +523,7 @@ export default function App() {
     // 3. Delete from Cloud Firestore
     CloudStorageService.deleteFamily(familyId);
 
-    // 4. Select next authorized family
+    // 4. Select next authorized family if available
     const nextFam = remainingFamilies.find(
       (f) =>
         f.ownerId === currentUser?.id ||
@@ -538,10 +532,15 @@ export default function App() {
     if (nextFam) {
       setActiveFamilyId(nextFam.id);
       StorageService.setActiveFamilyId(nextFam.id);
-    } else if (currentUser) {
-      const newFamName = isHe ? `המשפחה של ${currentUser.name}` : `${currentUser.name}'s Family`;
-      handleCreateFamily(newFamName, '🏡');
+    } else {
+      setActiveFamilyId('');
+      StorageService.setActiveFamilyId('');
     }
+
+    // Close all open modals immediately
+    setIsManageFamiliesOpen(false);
+    setSelectedCoupon(null);
+    setRedeemingCoupon(null);
   };
 
   // Handle Send Invite
@@ -630,6 +629,21 @@ export default function App() {
         lang={lang}
         onLanguageChange={setLang}
         onSuccess={(u) => setCurrentUser(u)}
+      />
+    );
+  }
+
+  // If user has no families yet: Show Onboarding Connection Screen
+  if (visibleFamilies.length === 0) {
+    return (
+      <OnboardingNoFamilyScreen
+        currentUser={currentUser}
+        invites={invites}
+        lang={lang}
+        onLanguageChange={setLang}
+        onLogout={handleLogout}
+        onCreateFamily={handleCreateFamily}
+        onAcceptInvite={handleAcceptInvite}
       />
     );
   }
@@ -804,13 +818,26 @@ export default function App() {
       {selectedCoupon && (
         <CouponDetailModal
           coupon={selectedCoupon}
+          currentUser={currentUser}
           lang={lang}
           isOpen={!!selectedCoupon}
           onClose={() => setSelectedCoupon(null)}
-          onOpenRedeem={(c) => setRedeemingCoupon(c)}
-          onFastFullRedeem={handleFastFullRedeem}
-          onOpenEdit={(c) => setEditingCoupon(c)}
-          onDelete={handleDeleteCoupon}
+          onOpenRedeem={(c) => {
+            setSelectedCoupon(null);
+            setRedeemingCoupon(c);
+          }}
+          onFastFullRedeem={(c) => {
+            handleFastFullRedeem(c);
+            setSelectedCoupon(null);
+          }}
+          onOpenEdit={(c) => {
+            setSelectedCoupon(null);
+            setEditingCoupon(c);
+          }}
+          onDelete={(id) => {
+            handleDeleteCoupon(id);
+            setSelectedCoupon(null);
+          }}
           onUndoUsage={handleUndoUsage}
         />
       )}
@@ -823,7 +850,10 @@ export default function App() {
           currentUser={currentUser}
           lang={lang}
           isOpen={!!redeemingCoupon}
-          onClose={() => setRedeemingCoupon(null)}
+          onClose={() => {
+            setRedeemingCoupon(null);
+            setSelectedCoupon(null);
+          }}
           onRedeem={handleRedeemCoupon}
         />
       )}
@@ -839,6 +869,7 @@ export default function App() {
           onClose={() => {
             setIsAddModalOpen(false);
             setEditingCoupon(null);
+            setSelectedCoupon(null);
           }}
           onSave={handleSaveCoupon}
         />
@@ -852,7 +883,10 @@ export default function App() {
           currentUser={currentUser}
           lang={lang}
           isOpen={isQuickAddOpen}
-          onClose={() => setIsQuickAddOpen(false)}
+          onClose={() => {
+            setIsQuickAddOpen(false);
+            setSelectedCoupon(null);
+          }}
           onSave={handleSaveCoupon}
         />
       )}
@@ -867,10 +901,19 @@ export default function App() {
           lang={lang}
           isOpen={isManageFamiliesOpen}
           onClose={() => setIsManageFamiliesOpen(false)}
-          onSelectFamily={handleSelectFamily}
-          onCreateFamily={handleCreateFamily}
+          onSelectFamily={(id) => {
+            handleSelectFamily(id);
+            setIsManageFamiliesOpen(false);
+          }}
+          onCreateFamily={(name, emoji) => {
+            handleCreateFamily(name, emoji);
+            setIsManageFamiliesOpen(false);
+          }}
           onEditFamily={handleEditFamily}
-          onDeleteFamily={handleDeleteFamily}
+          onDeleteFamily={(id) => {
+            handleDeleteFamily(id);
+            setIsManageFamiliesOpen(false);
+          }}
           onSendInvite={handleSendInvite}
           onAcceptInvite={handleAcceptInvite}
           onDeclineInvite={handleDeclineInvite}

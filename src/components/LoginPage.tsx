@@ -12,6 +12,10 @@ import {
   Globe,
   AlertCircle,
   Loader2,
+  ExternalLink,
+  HelpCircle,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { AuthService } from '../services/firebase';
 import { Language, User as AppUser } from '../types';
@@ -38,9 +42,18 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [unauthorizedDomain, setUnauthorizedDomain] = useState<string | null>(null);
+  const [copiedDomain, setCopiedDomain] = useState(false);
 
   const mapAuthError = (err: unknown): string => {
     const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes('auth/unauthorized-domain')) {
+      const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'kin1proj-lab.github.io';
+      setUnauthorizedDomain(currentHost);
+      return isHe
+        ? `דומיין זה (${currentHost}) טרם אושר ב-Firebase Authentication.`
+        : `This domain (${currentHost}) is not authorized in Firebase Authentication.`;
+    }
     if (msg.includes('auth/invalid-credential') || msg.includes('auth/wrong-password')) {
       return isHe ? 'כתובת דוא״ל או סיסמה שגויים.' : 'Invalid email or password.';
     }
@@ -62,8 +75,16 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     return msg;
   };
 
+  const handleCopyDomain = () => {
+    if (!unauthorizedDomain) return;
+    navigator.clipboard.writeText(unauthorizedDomain);
+    setCopiedDomain(true);
+    setTimeout(() => setCopiedDomain(false), 3000);
+  };
+
   const handleGoogleSignIn = async () => {
     setErrorMessage('');
+    setUnauthorizedDomain(null);
     setGoogleLoading(true);
     try {
       const user = await AuthService.signInWithGoogle();
@@ -155,6 +176,85 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
               <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
               <span>{errorMessage}</span>
+            </div>
+          )}
+
+          {/* Unauthorized Domain Guide Card */}
+          {unauthorizedDomain && (
+            <div className="mb-5 p-4 rounded-2xl bg-amber-50 border border-amber-300 text-amber-950 text-xs space-y-3 animate-in fade-in">
+              <div className="flex items-start gap-2">
+                <HelpCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <div className="font-bold text-sm text-amber-900">
+                    {isHe ? 'כיצד לאשר את הדומיין שלך ב-Firebase:' : 'How to Authorize this Domain in Firebase:'}
+                  </div>
+                  <p className="text-amber-800 leading-relaxed text-[11px]">
+                    {isHe
+                      ? 'גוגל חוסמת התחברות מדומיינים חדשים (כמו GitHub Pages) עד שמוסיפים אותם לרשימת הדומיינים המורשים.'
+                      : 'Google blocks sign-in from external hosts (like GitHub Pages) until added to Authorized Domains.'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Copy domain button */}
+              <div className="p-2.5 bg-white rounded-xl border border-amber-200 flex items-center justify-between gap-2">
+                <span className="font-mono text-xs text-slate-800 truncate select-all">
+                  {unauthorizedDomain}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleCopyDomain}
+                  className="px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer shrink-0"
+                >
+                  {copiedDomain ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>{isHe ? 'הועתק!' : 'Copied!'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>{isHe ? 'העתק דומיין' : 'Copy Domain'}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Steps */}
+              <ol className="list-decimal list-inside space-y-1 text-[11px] text-amber-900 font-medium">
+                <li>
+                  {isHe
+                    ? 'פתח את הגדרות Firebase Console בקישור למטה.'
+                    : 'Open Firebase Console Authentication Settings below.'}
+                </li>
+                <li>
+                  {isHe
+                    ? 'בלשונית "Authorized domains" לחץ על "Add domain".'
+                    : 'Under "Authorized domains", click "Add domain".'}
+                </li>
+                <li>
+                  {isHe
+                    ? 'הדבק את הדומיין ולחץ על "Save".'
+                    : 'Paste the domain and click "Save".'}
+                </li>
+              </ol>
+
+              {/* Open Console Button */}
+              <a
+                href="https://console.firebase.google.com/project/ai-studio-applet-webapp-66dfd/authentication/settings"
+                target="_blank"
+                rel="noreferrer"
+                className="w-full py-2 px-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shadow-xs"
+              >
+                <span>{isHe ? 'פתיחת הגדרות Firebase Console' : 'Open Firebase Console Settings'}</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+
+              <p className="text-[10px] text-amber-700 text-center font-medium">
+                {isHe
+                  ? '💡 בינתיים ניתן להתחבר או להירשם מיד עם אימייל וסיסמה בלשונית למטה!'
+                  : '💡 In the meantime, you can sign in or register with email & password below!'}
+              </p>
             </div>
           )}
 

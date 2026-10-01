@@ -129,6 +129,23 @@ npm run lint
 
 ---
 
+## 🌐 Deploying to GitHub Pages or Custom Domains (Fixing `auth/unauthorized-domain`)
+
+If you deploy this application to GitHub Pages (e.g. `https://kin1proj-lab.github.io/family-coupon-app`) or any custom domain, Firebase Authentication requires adding your host to the **Authorized Domains** list before Google Sign-In will work:
+
+1. Open the [Firebase Console Authentication Settings](https://console.firebase.google.com/project/ai-studio-applet-webapp-66dfd/authentication/settings).
+2. Go to the **Settings** tab and select **Authorized domains** (דומיינים מורשים).
+3. Click **Add domain** (הוסף דומיין) and enter your domain name:
+   ```text
+   kin1proj-lab.github.io
+   ```
+   *(Note: enter only the domain hostname without `https://` or path `/family-coupon-app`)*.
+4. Click **Save**. Google Sign-In will now work immediately on your deployed site.
+
+> 💡 **Tip:** While waiting to add your domain, you can always sign in or register instantly using the **Email & Password** tab.
+
+---
+
 ## 🔒 Security & Privacy
 
 - Firestore security rules (`firestore.rules`) enforce secure top-level collection access.

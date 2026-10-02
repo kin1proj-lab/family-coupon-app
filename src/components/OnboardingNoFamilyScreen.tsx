@@ -22,7 +22,7 @@ interface OnboardingNoFamilyScreenProps {
   onLanguageChange: (lang: Language) => void;
   onLogout: () => void;
   onCreateFamily: (name: string, emoji: string) => void;
-  onAcceptInvite: (invite: FamilyInvite) => void;
+  onAcceptInvite: (inviteId: string) => void;
 }
 
 export const OnboardingNoFamilyScreen: React.FC<OnboardingNoFamilyScreenProps> = ({
@@ -190,7 +190,7 @@ export const OnboardingNoFamilyScreen: React.FC<OnboardingNoFamilyScreenProps> =
                       </div>
                       <button
                         type="button"
-                        onClick={() => onAcceptInvite(inv)}
+                        onClick={() => onAcceptInvite(inv.id)}
                         className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer shrink-0"
                       >
                         {isHe ? 'הצטרף עכשיו' : 'Accept & Join'}

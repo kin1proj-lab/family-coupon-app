@@ -39,7 +39,8 @@ export const AddEditCouponModal: React.FC<AddEditCouponModalProps> = ({
   const isHe = lang === 'he';
   const t = getTranslation(lang);
   const isEditing = !!coupon;
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const [title, setTitle] = useState(coupon?.title || '');
   const [storeName, setStoreName] = useState(coupon?.storeName || '');
@@ -236,8 +237,16 @@ export const AddEditCouponModal: React.FC<AddEditCouponModalProps> = ({
               </span>
             </div>
 
+            {/* Hidden Inputs: Gallery/Files (no capture) & Camera (with capture) */}
             <input
-              ref={fileInputRef}
+              ref={galleryInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleFileChange}
+              className="hidden"
+            />
+            <input
+              ref={cameraInputRef}
               type="file"
               accept="image/*"
               capture="environment"
@@ -246,24 +255,35 @@ export const AddEditCouponModal: React.FC<AddEditCouponModalProps> = ({
             />
 
             {imageUrl ? (
-              <div className="relative rounded-xl border border-sky-300 bg-white p-2 flex items-center justify-between">
+              <div className="relative rounded-2xl border border-sky-300 bg-white p-2.5 flex items-center justify-between shadow-2xs">
                 <div className="flex items-center gap-3">
                   <img
                     src={imageUrl}
                     alt="Voucher preview"
-                    className="w-16 h-12 rounded-lg object-cover border border-slate-200"
+                    className="w-16 h-12 rounded-xl object-cover border border-slate-200 shadow-2xs"
                   />
-                  <div className="text-xs font-medium text-slate-700">
+                  <div className="text-xs font-bold text-slate-800">
                     {isHe ? 'תמונה צורפה בהצלחה' : 'Image attached'}
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 flex-wrap">
                   <button
                     type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="px-2.5 py-1 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg cursor-pointer"
+                    onClick={() => galleryInputRef.current?.click()}
+                    className="px-2.5 py-1 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg cursor-pointer flex items-center gap-1"
+                    title={isHe ? 'בחר מגלריה' : 'Choose from gallery'}
                   >
-                    {t.changePhoto}
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>{isHe ? 'גלריה' : 'Gallery'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => cameraInputRef.current?.click()}
+                    className="px-2.5 py-1 text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg cursor-pointer flex items-center gap-1"
+                    title={isHe ? 'צלם במצלמה' : 'Take with camera'}
+                  >
+                    <Camera className="w-3.5 h-3.5" />
+                    <span>{isHe ? 'מצלמה' : 'Camera'}</span>
                   </button>
                   <button
                     type="button"
@@ -275,14 +295,44 @@ export const AddEditCouponModal: React.FC<AddEditCouponModalProps> = ({
                 </div>
               </div>
             ) : (
-              <div
-                onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-sky-300 hover:border-blue-500 hover:bg-white rounded-xl p-3 text-center cursor-pointer transition-colors flex items-center justify-center gap-2"
-              >
-                <Upload className="w-4 h-4 text-blue-600" />
-                <span className="text-xs font-semibold text-blue-900">
-                  {t.tapToUpload}
-                </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {/* 1. Gallery / Files Button */}
+                <button
+                  type="button"
+                  onClick={() => galleryInputRef.current?.click()}
+                  className="p-3 border-2 border-dashed border-sky-300 hover:border-blue-500 hover:bg-sky-50/60 rounded-2xl text-center cursor-pointer transition-all flex items-center justify-center gap-2.5 group bg-white shadow-2xs"
+                >
+                  <div className="w-8 h-8 rounded-xl bg-sky-100 text-blue-600 flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
+                    <Upload className="w-4 h-4" />
+                  </div>
+                  <div className="text-left rtl:text-right">
+                    <div className="text-xs font-bold text-slate-800">
+                      {isHe ? 'העלאה מגלריה / קבצים' : 'Gallery or Files'}
+                    </div>
+                    <div className="text-[10px] text-slate-500">
+                      {isHe ? 'בחר תמונה מהמכשיר' : 'Select existing photo'}
+                    </div>
+                  </div>
+                </button>
+
+                {/* 2. Camera Button */}
+                <button
+                  type="button"
+                  onClick={() => cameraInputRef.current?.click()}
+                  className="p-3 border-2 border-dashed border-emerald-300 hover:border-emerald-500 hover:bg-emerald-50/60 rounded-2xl text-center cursor-pointer transition-all flex items-center justify-center gap-2.5 group bg-white shadow-2xs"
+                >
+                  <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
+                    <Camera className="w-4 h-4" />
+                  </div>
+                  <div className="text-left rtl:text-right">
+                    <div className="text-xs font-bold text-slate-800">
+                      {isHe ? 'צילום במצלמה' : 'Open Camera'}
+                    </div>
+                    <div className="text-[10px] text-slate-500">
+                      {isHe ? 'צלם שובר עכשיו' : 'Snap photo now'}
+                    </div>
+                  </div>
+                </button>
               </div>
             )}
           </div>

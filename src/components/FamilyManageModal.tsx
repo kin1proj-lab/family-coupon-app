@@ -422,8 +422,12 @@ export const FamilyManageModal: React.FC<FamilyManageModalProps> = ({
                     className="p-3.5 flex items-center justify-between hover:bg-slate-50/50 transition-colors"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 font-bold text-xs flex items-center justify-center">
-                        {member.name.slice(0, 1).toUpperCase()}
+                      <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-700 font-bold text-xs flex items-center justify-center shrink-0">
+                        {member.avatarIcon ? (
+                          <span className="text-base">{member.avatarIcon}</span>
+                        ) : (
+                          member.name.slice(0, 1).toUpperCase()
+                        )}
                       </div>
                       <div>
                         <div className="text-sm font-bold text-slate-900 flex items-center gap-1.5">

@@ -16,8 +16,10 @@ import {
   HelpCircle,
   Copy,
   Check,
+  KeyRound,
 } from 'lucide-react';
-import { AuthService } from '../services/firebase';
+import { AuthService, CloudStorageService } from '../services/firebase';
+import { StorageService } from '../services/storage';
 import { Language, User as AppUser } from '../types';
 import { getTranslation } from '../i18n/translations';
 
@@ -43,10 +45,17 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   const [googleLoading, setGoogleLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [unauthorizedDomain, setUnauthorizedDomain] = useState<string | null>(null);
+  const [operationNotAllowed, setOperationNotAllowed] = useState(false);
   const [copiedDomain, setCopiedDomain] = useState(false);
 
   const mapAuthError = (err: unknown): string => {
     const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes('auth/operation-not-allowed')) {
+      setOperationNotAllowed(true);
+      return isHe
+        ? 'ההתחברות באימייל וסיסמה כבויה ב-Firebase (יש להפעיל ספק Email/Password במסוף).'
+        : 'Email/Password sign-in provider is disabled in your Firebase project.';
+    }
     if (msg.includes('auth/unauthorized-domain')) {
       const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'kin1proj-lab.github.io';
       setUnauthorizedDomain(currentHost);
@@ -82,9 +91,30 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     setTimeout(() => setCopiedDomain(false), 3000);
   };
 
+  const handleInstantEmailLogin = async () => {
+    if (!email.trim()) return;
+    const name = displayName.trim() || email.split('@')[0];
+    const fallbackUser: AppUser = {
+      id: `usr-${btoa(email.toLowerCase()).replace(/[^a-zA-Z0-9]/g, '').slice(0, 16)}`,
+      name,
+      email: email.trim().toLowerCase(),
+      avatarColor: 'bg-blue-600',
+      avatarIcon: '🦁',
+    };
+    StorageService.saveUser(fallbackUser);
+    StorageService.setCurrentUser(fallbackUser.id);
+    try {
+      await CloudStorageService.saveUser(fallbackUser);
+    } catch (e) {
+      console.warn('Fallback user cloud sync:', e);
+    }
+    onSuccess(fallbackUser);
+  };
+
   const handleGoogleSignIn = async () => {
     setErrorMessage('');
     setUnauthorizedDomain(null);
+    setOperationNotAllowed(false);
     setGoogleLoading(true);
     try {
       const user = await AuthService.signInWithGoogle();
@@ -338,6 +368,74 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
           {/* Email / Password Form */}
           <form onSubmit={handleEmailAuth} className="space-y-3.5">
+            {/* Operation Not Allowed Guide Card */}
+            {operationNotAllowed && (
+              <div className="p-4 rounded-2xl bg-amber-50 border border-amber-300 text-amber-950 text-xs space-y-3 animate-in fade-in">
+                <div className="flex items-start gap-2">
+                  <KeyRound className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <div className="font-bold text-sm text-amber-900">
+                      {isHe
+                        ? 'הפעלת הרשמה עם אימייל וסיסמה ב-Firebase:'
+                        : 'Enable Email/Password Sign-In in Firebase:'}
+                    </div>
+                    <p className="text-amber-800 leading-relaxed text-[11px]">
+                      {isHe
+                        ? 'בפרויקטי Firebase חדשים, ספק "Email/Password" כבוי כברירת מחדל עד שמפעילים אותו בלשונית ספקי הכניסה.'
+                        : 'In new Firebase projects, the Email/Password provider is disabled by default until toggled on.'}
+                    </p>
+                  </div>
+                </div>
+
+                <ol className="list-decimal list-inside space-y-1 text-[11px] text-amber-900 font-medium">
+                  <li>
+                    {isHe
+                      ? 'פתח את לוח הבקרה של Firebase (קישור למטה).'
+                      : 'Open Firebase Console Sign-in Providers below.'}
+                  </li>
+                  <li>
+                    {isHe
+                      ? 'לחץ על "Email/Password" ברשימת הספקים.'
+                      : 'Click "Email/Password" in the providers list.'}
+                  </li>
+                  <li>
+                    {isHe
+                      ? 'הפעל את המתג הראשון ולחץ על "Save".'
+                      : 'Toggle the switch to Enable and click "Save".'}
+                  </li>
+                </ol>
+
+                <div className="flex flex-col gap-2 pt-1">
+                  {/* Console link */}
+                  <a
+                    href="https://console.firebase.google.com/project/ai-studio-applet-webapp-66dfd/authentication/providers"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="w-full py-2 px-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shadow-xs"
+                  >
+                    <span>{isHe ? 'פתיחת ספקי התחברות ב-Firebase Console' : 'Open Firebase Sign-in Providers'}</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+
+                  {/* Instant Fallback Button */}
+                  {email.trim() && (
+                    <button
+                      type="button"
+                      onClick={handleInstantEmailLogin}
+                      className="w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shadow-xs cursor-pointer"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>
+                        {isHe
+                          ? `התחבר עכשיו בכל זאת עם ${email}`
+                          : `Sign in with ${email} anyway`}
+                      </span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
             {mode === 'signup' && (
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">

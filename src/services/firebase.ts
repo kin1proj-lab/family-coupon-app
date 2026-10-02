@@ -335,4 +335,14 @@ export const CloudStorageService = {
       handleFirestoreError(err, OperationType.WRITE, path);
     }
   },
+
+  // Save / Update user profile in Cloud Firestore
+  async saveUser(user: User): Promise<void> {
+    const path = `${COLLECTIONS.USERS}/${user.id}`;
+    try {
+      await setDoc(doc(db, COLLECTIONS.USERS, user.id), user, { merge: true });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, path);
+    }
+  },
 };

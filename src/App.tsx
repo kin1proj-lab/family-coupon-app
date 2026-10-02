@@ -32,6 +32,7 @@ import { QuickAddModal } from './components/QuickAddModal';
 import { FamilyManageModal } from './components/FamilyManageModal';
 import { LoginPage } from './components/LoginPage';
 import { OnboardingNoFamilyScreen } from './components/OnboardingNoFamilyScreen';
+import { UserSettingsModal } from './components/UserSettingsModal';
 
 export default function App() {
   const [lang, setLang] = useState<Language>('he');
@@ -53,6 +54,7 @@ export default function App() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [isManageFamiliesOpen, setIsManageFamiliesOpen] = useState(false);
+  const [isUserSettingsOpen, setIsUserSettingsOpen] = useState(false);
 
   // Default Filter: ONLY show usable coupons
   const [filters, setFilters] = useState<FilterState>({
@@ -68,7 +70,17 @@ export default function App() {
   // 1. Listen to Firebase Authentication state
   useEffect(() => {
     const unsubAuth = AuthService.onAuthStateChange((user) => {
-      setCurrentUser(user);
+      if (user) {
+        setCurrentUser(user);
+        StorageService.setCurrentUser(user.id);
+      } else {
+        const localUser = StorageService.getCurrentUser();
+        if (localUser) {
+          setCurrentUser(localUser);
+        } else {
+          setCurrentUser(null);
+        }
+      }
       setAuthInitialized(true);
     });
     return () => unsubAuth();
@@ -292,7 +304,12 @@ export default function App() {
 
   // Handle Logout
   const handleLogout = async () => {
-    await AuthService.signOut();
+    try {
+      await AuthService.signOut();
+    } catch (e) {
+      console.warn('Sign out error:', e);
+    }
+    StorageService.setCurrentUser(null);
     setCurrentUser(null);
   };
 
@@ -622,6 +639,37 @@ export default function App() {
     CloudStorageService.saveInvite(updatedInvite);
   };
 
+  // Handle Save User Profile & Avatar Icon
+  const handleSaveUser = (updatedUser: User) => {
+    setCurrentUser(updatedUser);
+    StorageService.saveUser(updatedUser);
+    CloudStorageService.saveUser(updatedUser);
+
+    // Update avatarIcon and name across all families this user belongs to
+    const updatedFamilies = families.map((fam) => {
+      const hasMember = fam.members.some((m) => m.userId === updatedUser.id);
+      if (!hasMember) return fam;
+      const updatedFam: Family = {
+        ...fam,
+        members: fam.members.map((m) =>
+          m.userId === updatedUser.id
+            ? {
+                ...m,
+                name: updatedUser.name,
+                avatarIcon: updatedUser.avatarIcon,
+              }
+            : m
+        ),
+      };
+      CloudStorageService.saveFamily(updatedFam);
+      return updatedFam;
+    });
+
+    setFamilies(updatedFamilies);
+    StorageService.saveFamilies(updatedFamilies);
+    setIsUserSettingsOpen(false);
+  };
+
   // Show login page if user is not authenticated
   if (!currentUser) {
     return (
@@ -679,6 +727,7 @@ export default function App() {
         onOpenAddCoupon={() => setIsAddModalOpen(true)}
         onOpenQuickAdd={() => setIsQuickAddOpen(true)}
         onOpenManageFamilies={() => setIsManageFamiliesOpen(true)}
+        onOpenUserSettings={() => setIsUserSettingsOpen(true)}
       />
 
       {/* Main Container */}
@@ -917,6 +966,17 @@ export default function App() {
           onSendInvite={handleSendInvite}
           onAcceptInvite={handleAcceptInvite}
           onDeclineInvite={handleDeclineInvite}
+        />
+      )}
+
+      {/* User Settings & Avatar Icon Modal */}
+      {isUserSettingsOpen && (
+        <UserSettingsModal
+          currentUser={currentUser}
+          lang={lang}
+          isOpen={isUserSettingsOpen}
+          onClose={() => setIsUserSettingsOpen(false)}
+          onSaveUser={handleSaveUser}
         />
       )}
     </div>

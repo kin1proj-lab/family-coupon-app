@@ -10,6 +10,8 @@ import {
   LogOut,
   Check,
   User as UserIcon,
+  Smile,
+  Settings,
 } from 'lucide-react';
 import { Family, Language, User } from '../types';
 import { getTranslation } from '../i18n/translations';
@@ -25,6 +27,7 @@ interface HeaderProps {
   onOpenAddCoupon: () => void;
   onOpenQuickAdd: () => void;
   onOpenManageFamilies: () => void;
+  onOpenUserSettings: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -38,6 +41,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenAddCoupon,
   onOpenQuickAdd,
   onOpenManageFamilies,
+  onOpenUserSettings,
 }) => {
   const isHe = lang === 'he';
   const t = getTranslation(lang);
@@ -111,9 +115,13 @@ export const Header: React.FC<HeaderProps> = ({
                 <div
                   className={`w-8 h-8 rounded-xl ${
                     currentUser.avatarColor || 'bg-gradient-to-tr from-blue-600 to-indigo-600'
-                  } text-white text-xs font-bold flex items-center justify-center shrink-0 shadow-xs`}
+                  } text-white text-sm font-bold flex items-center justify-center shrink-0 shadow-xs`}
                 >
-                  {currentUser.name.slice(0, 1).toUpperCase()}
+                  {currentUser.avatarIcon ? (
+                    <span>{currentUser.avatarIcon}</span>
+                  ) : (
+                    <span>{currentUser.name.slice(0, 1).toUpperCase()}</span>
+                  )}
                 </div>
                 <ChevronDown className="w-3.5 h-3.5 text-slate-500 hidden sm:block ltr:mr-1 rtl:ml-1" />
               </button>
@@ -135,9 +143,13 @@ export const Header: React.FC<HeaderProps> = ({
                         <div
                           className={`w-9 h-9 rounded-xl ${
                             currentUser.avatarColor || 'bg-blue-600'
-                          } text-white text-sm font-bold flex items-center justify-center shrink-0`}
+                          } text-white text-base font-bold flex items-center justify-center shrink-0 shadow-xs`}
                         >
-                          {currentUser.name.slice(0, 1).toUpperCase()}
+                          {currentUser.avatarIcon ? (
+                            <span>{currentUser.avatarIcon}</span>
+                          ) : (
+                            <span>{currentUser.name.slice(0, 1).toUpperCase()}</span>
+                          )}
                         </div>
                         <div className="min-w-0">
                           <div className="text-xs font-bold text-slate-900 truncate flex items-center gap-1">
@@ -178,7 +190,30 @@ export const Header: React.FC<HeaderProps> = ({
                         <ChevronDown className="w-3.5 h-3.5 text-slate-400 rotate-[-90deg] rtl:rotate-[90deg]" />
                       </button>
 
-                      {/* Action 2: Language */}
+                      {/* Action 2: User Settings & Avatar Icon */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUserMenuOpen(false);
+                          onOpenUserSettings();
+                        }}
+                        className="w-full flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-100 text-xs font-bold text-slate-800 transition-colors cursor-pointer text-start"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-7 h-7 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 text-sm">
+                            {currentUser.avatarIcon || <Smile className="w-4 h-4" />}
+                          </div>
+                          <div>
+                            <div>{isHe ? 'הגדרות משתמש ואייקון' : 'User Settings & Avatar'}</div>
+                            <div className="text-[10px] font-normal text-slate-400">
+                              {isHe ? 'בחר אייקון מתוך 10 אייקונים' : 'Choose from 10 icons'}
+                            </div>
+                          </div>
+                        </div>
+                        <ChevronDown className="w-3.5 h-3.5 text-slate-400 rotate-[-90deg] rtl:rotate-[90deg]" />
+                      </button>
+
+                      {/* Action 3: Language */}
                       <button
                         type="button"
                         onClick={() => {
@@ -205,7 +240,7 @@ export const Header: React.FC<HeaderProps> = ({
 
                       <div className="border-t border-slate-100 my-1" />
 
-                      {/* Action 3: Logout */}
+                      {/* Action 4: Logout */}
                       <button
                         type="button"
                         onClick={() => {

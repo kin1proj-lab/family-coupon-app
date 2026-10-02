@@ -7,6 +7,7 @@ export interface User {
   name: string;
   email: string;
   avatarColor: string;
+  avatarIcon?: string;
 }
 
 export interface FamilyMember {
@@ -15,6 +16,7 @@ export interface FamilyMember {
   email: string;
   role: UserRole;
   joinedAt: string;
+  avatarIcon?: string;
 }
 
 export interface FamilyInvite {

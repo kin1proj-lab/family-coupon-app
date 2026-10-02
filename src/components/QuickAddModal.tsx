@@ -35,7 +35,8 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
 }) => {
   const isHe = lang === 'he';
   const t = getTranslation(lang);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const [storeName, setStoreName] = useState('');
   const [initialValue, setInitialValue] = useState<number>(100);
@@ -284,8 +285,16 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
               <span>3. {t.photoVoucher} *</span>
             </label>
 
+            {/* Hidden Inputs: Gallery/Files (no capture) & Camera (with capture) */}
             <input
-              ref={fileInputRef}
+              ref={galleryInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleFileChange}
+              className="hidden"
+            />
+            <input
+              ref={cameraInputRef}
               type="file"
               accept="image/*"
               capture="environment"
@@ -303,10 +312,19 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
                 <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                   <button
                     type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="px-3 py-1.5 rounded-xl bg-white text-slate-800 text-xs font-bold shadow hover:bg-slate-100 cursor-pointer"
+                    onClick={() => galleryInputRef.current?.click()}
+                    className="px-3 py-1.5 rounded-xl bg-white text-slate-800 text-xs font-bold shadow hover:bg-slate-100 cursor-pointer flex items-center gap-1"
                   >
-                    {t.changePhoto}
+                    <Upload className="w-3 h-3" />
+                    <span>{isHe ? 'גלריה' : 'Gallery'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => cameraInputRef.current?.click()}
+                    className="px-3 py-1.5 rounded-xl bg-white text-slate-800 text-xs font-bold shadow hover:bg-slate-100 cursor-pointer flex items-center gap-1"
+                  >
+                    <Camera className="w-3 h-3" />
+                    <span>{isHe ? 'מצלמה' : 'Camera'}</span>
                   </button>
                   <button
                     type="button"
@@ -318,23 +336,44 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
                 </div>
               </div>
             ) : (
-              <div
-                onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-slate-300 hover:border-blue-500 hover:bg-blue-50/40 rounded-2xl p-6 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2 group"
-              >
-                <div className="w-12 h-12 rounded-2xl bg-blue-100 text-blue-600 group-hover:scale-110 transition-transform flex items-center justify-center">
-                  <Camera className="w-6 h-6" />
-                </div>
-                <div>
-                  <div className="text-xs font-bold text-slate-800">
-                    {t.tapToUpload}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* 1. Gallery / Device Files */}
+                <button
+                  type="button"
+                  onClick={() => galleryInputRef.current?.click()}
+                  className="border-2 border-dashed border-sky-300 hover:border-blue-500 hover:bg-sky-50/50 rounded-2xl p-4 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2 group bg-white shadow-2xs"
+                >
+                  <div className="w-10 h-10 rounded-2xl bg-sky-100 text-blue-600 group-hover:scale-105 transition-transform flex items-center justify-center">
+                    <Upload className="w-5 h-5" />
                   </div>
-                  <div className="text-[11px] text-slate-500 mt-0.5">
-                    {isHe
-                      ? 'צלם ישירות במצלמה או בחר קובץ מגלריית התמונות'
-                      : 'Take a photo with camera or choose from library'}
+                  <div>
+                    <div className="text-xs font-bold text-slate-800">
+                      {isHe ? 'העלאה מגלריה / קבצים' : 'Gallery or Files'}
+                    </div>
+                    <div className="text-[10px] text-slate-500 mt-0.5">
+                      {isHe ? 'בחר מתוך אלבום התמונות' : 'Choose from photo library'}
+                    </div>
                   </div>
-                </div>
+                </button>
+
+                {/* 2. Open Camera */}
+                <button
+                  type="button"
+                  onClick={() => cameraInputRef.current?.click()}
+                  className="border-2 border-dashed border-emerald-300 hover:border-emerald-500 hover:bg-emerald-50/50 rounded-2xl p-4 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2 group bg-white shadow-2xs"
+                >
+                  <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-600 group-hover:scale-105 transition-transform flex items-center justify-center">
+                    <Camera className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-slate-800">
+                      {isHe ? 'צילום במצלמה' : 'Open Camera'}
+                    </div>
+                    <div className="text-[10px] text-slate-500 mt-0.5">
+                      {isHe ? 'צלם שובר עכשיו' : 'Snap photo now'}
+                    </div>
+                  </div>
+                </button>
               </div>
             )}
 

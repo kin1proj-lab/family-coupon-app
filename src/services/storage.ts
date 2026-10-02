@@ -41,6 +41,17 @@ export const StorageService = {
     }
   },
 
+  saveUser(user: User) {
+    const users = this.getUsers();
+    const idx = users.findIndex((u) => u.id === user.id);
+    if (idx >= 0) {
+      users[idx] = user;
+    } else {
+      users.push(user);
+    }
+    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+  },
+
   getFamilies(): Family[] {
     const raw = localStorage.getItem(STORAGE_KEYS.FAMILIES);
     if (!raw) return [];

@@ -7,7 +7,7 @@ import {
   Clock,
   Key,
   FileText,
-  User,
+  User as UserIcon,
   History,
   CheckCircle,
   AlertTriangle,
@@ -19,13 +19,13 @@ import {
   Maximize2,
   Zap,
 } from 'lucide-react';
-import { Coupon, Language } from '../types';
+import { Coupon, Language, User as AppUser } from '../types';
 import { getTranslation } from '../i18n/translations';
 import { BarcodeRenderer } from './BarcodeRenderer';
 
 interface CouponDetailModalProps {
   coupon: Coupon;
-  currentUser?: User | null;
+  currentUser?: AppUser | null;
   lang: Language;
   isOpen: boolean;
   onClose: () => void;
@@ -331,7 +331,7 @@ export const CouponDetailModal: React.FC<CouponDetailModalProps> = ({
                         )}
                         <div className="text-[11px] text-slate-400 flex items-center gap-2">
                           <span className="flex items-center gap-1 font-medium text-slate-600">
-                            <User className="w-3 h-3 text-slate-400" />
+                            <UserIcon className="w-3 h-3 text-slate-400" />
                             {usage.userName}
                           </span>
                           <span>•</span>

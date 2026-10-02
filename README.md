@@ -146,6 +146,19 @@ If you deploy this application to GitHub Pages (e.g. `https://kin1proj-lab.githu
 
 ---
 
+## 🔑 Enabling Email/Password Registration (Fixing `auth/operation-not-allowed`)
+
+In new Firebase projects, the **Email/Password** sign-in provider is disabled by default until toggled on in the console:
+
+1. Open the [Firebase Console Authentication Sign-in Providers](https://console.firebase.google.com/project/ai-studio-applet-webapp-66dfd/authentication/providers).
+2. Click on **Email/Password** under the **Sign-in providers** list.
+3. Toggle the **Enable** switch to **ON**.
+4. Click **Save**.
+
+Users will now be able to register and sign in with any standard email and password.
+
+---
+
 ## 🔒 Security & Privacy
 
 - Firestore security rules (`firestore.rules`) enforce secure top-level collection access.

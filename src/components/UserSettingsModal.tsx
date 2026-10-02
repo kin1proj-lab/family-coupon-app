@@ -6,8 +6,11 @@ import {
   Sparkles,
   Smile,
   Palette,
+  Sun,
+  Moon,
+  Laptop,
 } from 'lucide-react';
-import { Language, User } from '../types';
+import { Language, ThemeMode, User } from '../types';
 import { getTranslation } from '../i18n/translations';
 
 export const USER_AVATAR_ICONS = [
@@ -34,6 +37,8 @@ export const AVATAR_COLORS = [
 interface UserSettingsModalProps {
   currentUser: User;
   lang: Language;
+  theme: ThemeMode;
+  onThemeChange: (theme: ThemeMode) => void;
   isOpen: boolean;
   onClose: () => void;
   onSaveUser: (updatedUser: User) => void;
@@ -42,6 +47,8 @@ interface UserSettingsModalProps {
 export const UserSettingsModal: React.FC<UserSettingsModalProps> = ({
   currentUser,
   lang,
+  theme,
+  onThemeChange,
   isOpen,
   onClose,
   onSaveUser,
@@ -77,7 +84,7 @@ export const UserSettingsModal: React.FC<UserSettingsModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div
-        className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]"
+        className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 rounded-3xl max-w-md w-full shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col max-h-[92vh] transition-colors"
         dir={isHe ? 'rtl' : 'ltr'}
       >
         {/* Header */}
@@ -88,12 +95,12 @@ export const UserSettingsModal: React.FC<UserSettingsModalProps> = ({
             </div>
             <div>
               <h3 className="font-extrabold text-base sm:text-lg">
-                {isHe ? 'הגדרות משתמש ואייקון אישי' : 'User Settings & Avatar'}
+                {isHe ? 'הגדרות משתמש ותצוגה' : 'User Settings & Appearance'}
               </h3>
               <p className="text-[11px] text-sky-100">
                 {isHe
-                  ? 'בחר אייקון שייצג אותך בכספת המשפחתית'
-                  : 'Choose an icon to represent you across the family vault'}
+                  ? 'בחר אייקון שייצג אותך והתאם את מראה האפליקציה'
+                  : 'Customize your avatar and theme preferences'}
               </p>
             </div>
           </div>
@@ -109,29 +116,77 @@ export const UserSettingsModal: React.FC<UserSettingsModalProps> = ({
         {/* Content Body */}
         <form onSubmit={handleSubmit} className="p-5 space-y-5 overflow-y-auto flex-1">
           {/* Live Preview Card */}
-          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex items-center gap-3.5">
+          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 flex items-center gap-3.5">
             <div
               className={`w-14 h-14 rounded-2xl ${selectedColor} text-white text-2xl flex items-center justify-center shadow-md shrink-0 transition-all`}
             >
               <span>{selectedIcon}</span>
             </div>
             <div className="min-w-0">
-              <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+              <div className="text-xs font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider">
                 {isHe ? 'תצוגה מקדימה' : 'Live Preview'}
               </div>
-              <div className="text-sm font-extrabold text-slate-900 truncate">
+              <div className="text-sm font-extrabold text-slate-900 dark:text-white truncate">
                 {name || currentUser.name}
               </div>
-              <div className="text-xs text-slate-500 truncate">
+              <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
                 {currentUser.email}
               </div>
             </div>
           </div>
 
-          {/* 1. Pick Icon from 10 icons */}
+          {/* 1. Theme Selection */}
           <div className="space-y-2">
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+              <Sun className="w-3.5 h-3.5 text-blue-600 dark:text-sky-400" />
+              <span>{isHe ? 'מצב תצוגה (נושא)' : 'Appearance Mode'}</span>
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => onThemeChange('light')}
+                className={`py-2 px-3 rounded-xl border flex items-center justify-center gap-1.5 text-xs font-bold transition-all cursor-pointer ${
+                  theme === 'light'
+                    ? 'border-blue-600 bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 ring-2 ring-blue-500/20 shadow-xs'
+                    : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-750'
+                }`}
+              >
+                <Sun className="w-3.5 h-3.5 text-amber-500" />
+                <span>{isHe ? 'בהיר' : 'Light'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onThemeChange('dark')}
+                className={`py-2 px-3 rounded-xl border flex items-center justify-center gap-1.5 text-xs font-bold transition-all cursor-pointer ${
+                  theme === 'dark'
+                    ? 'border-blue-600 bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 ring-2 ring-blue-500/20 shadow-xs'
+                    : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-750'
+                }`}
+              >
+                <Moon className="w-3.5 h-3.5 text-purple-400" />
+                <span>{isHe ? 'כהה' : 'Dark'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onThemeChange('system')}
+                className={`py-2 px-3 rounded-xl border flex items-center justify-center gap-1.5 text-xs font-bold transition-all cursor-pointer ${
+                  theme === 'system'
+                    ? 'border-blue-600 bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 ring-2 ring-blue-500/20 shadow-xs'
+                    : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-750'
+                }`}
+              >
+                <Laptop className="w-3.5 h-3.5 text-sky-500" />
+                <span>{isHe ? 'אוטומטי' : 'System'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* 2. Pick Icon from 10 icons */}
+          <div className="space-y-2">
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-blue-600 dark:text-sky-400" />
               <span>
                 {isHe
                   ? 'בחר אייקון אישי (מתוך 10 אייקונים)'
@@ -149,13 +204,13 @@ export const UserSettingsModal: React.FC<UserSettingsModalProps> = ({
                     onClick={() => setSelectedIcon(item.icon)}
                     className={`h-13 rounded-2xl text-2xl flex flex-col items-center justify-center transition-all cursor-pointer border relative ${
                       isSelected
-                        ? 'border-blue-600 bg-blue-50/80 shadow-md scale-105 ring-2 ring-blue-500/30'
-                        : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                        ? 'border-blue-600 bg-blue-50/80 dark:bg-blue-950/60 shadow-md scale-105 ring-2 ring-blue-500/30'
+                        : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750'
                     }`}
                     title={isHe ? item.nameHe : item.nameEn}
                   >
                     <span>{item.icon}</span>
-                    <span className="text-[9px] font-bold text-slate-500 mt-0.5">
+                    <span className="text-[9px] font-bold text-slate-500 dark:text-slate-400 mt-0.5">
                       {isHe ? item.nameHe : item.nameEn}
                     </span>
                     {isSelected && (
@@ -169,10 +224,10 @@ export const UserSettingsModal: React.FC<UserSettingsModalProps> = ({
             </div>
           </div>
 
-          {/* 2. Pick Color */}
+          {/* 3. Pick Color */}
           <div className="space-y-2">
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-              <Palette className="w-3.5 h-3.5 text-blue-600" />
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+              <Palette className="w-3.5 h-3.5 text-blue-600 dark:text-sky-400" />
               <span>{isHe ? 'צבע רקע לאייקון' : 'Avatar Background Color'}</span>
             </label>
             <div className="flex items-center gap-2">
@@ -184,7 +239,7 @@ export const UserSettingsModal: React.FC<UserSettingsModalProps> = ({
                     type="button"
                     onClick={() => setSelectedColor(col.class)}
                     className={`w-9 h-9 rounded-xl ${col.class} flex items-center justify-center text-white transition-all cursor-pointer ${
-                      isSelected ? 'ring-3 ring-blue-500 ring-offset-2 scale-110 shadow-sm' : 'opacity-80 hover:opacity-100'
+                      isSelected ? 'ring-3 ring-blue-500 ring-offset-2 dark:ring-offset-slate-900 scale-110 shadow-sm' : 'opacity-80 hover:opacity-100'
                     }`}
                     title={isHe ? col.nameHe : col.nameEn}
                   >
@@ -195,9 +250,9 @@ export const UserSettingsModal: React.FC<UserSettingsModalProps> = ({
             </div>
           </div>
 
-          {/* 3. Display Name */}
+          {/* 4. Display Name */}
           <div className="space-y-1.5">
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
               {isHe ? 'שם לתצוגה' : 'Display Name'}
             </label>
             <input
@@ -205,7 +260,7 @@ export const UserSettingsModal: React.FC<UserSettingsModalProps> = ({
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-blue-500 rounded-xl text-sm font-semibold text-slate-800 outline-none"
+              className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-750 focus:border-blue-500 rounded-xl text-sm font-semibold text-slate-800 dark:text-slate-100 outline-none"
             />
           </div>
 
@@ -214,7 +269,7 @@ export const UserSettingsModal: React.FC<UserSettingsModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+              className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer"
             >
               {t.cancel}
             </button>
@@ -230,3 +285,4 @@ export const UserSettingsModal: React.FC<UserSettingsModalProps> = ({
     </div>
   );
 };
+

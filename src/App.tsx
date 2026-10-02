@@ -13,6 +13,7 @@ import {
   FamilyInvite,
   FilterState,
   Language,
+  ThemeMode,
   User,
 } from './types';
 import { StorageService } from './services/storage';
@@ -33,9 +34,13 @@ import { FamilyManageModal } from './components/FamilyManageModal';
 import { LoginPage } from './components/LoginPage';
 import { OnboardingNoFamilyScreen } from './components/OnboardingNoFamilyScreen';
 import { UserSettingsModal } from './components/UserSettingsModal';
+import { compressImage } from './utils/imageCompressor';
 
 export default function App() {
   const [lang, setLang] = useState<Language>('he');
+  const [theme, setTheme] = useState<ThemeMode>(
+    () => (localStorage.getItem('kupony_theme') as ThemeMode) || 'light'
+  );
   const t = getTranslation(lang);
   const isHe = lang === 'he';
 
@@ -55,6 +60,25 @@ export default function App() {
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [isManageFamiliesOpen, setIsManageFamiliesOpen] = useState(false);
   const [isUserSettingsOpen, setIsUserSettingsOpen] = useState(false);
+
+  // Sync dark class on document element
+  useEffect(() => {
+    const isDark =
+      theme === 'dark' ||
+      (theme === 'system' &&
+        typeof window !== 'undefined' &&
+        window.matchMedia('(prefers-color-scheme: dark)').matches);
+    if (isDark) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    localStorage.setItem('kupony_theme', theme);
+  }, [theme]);
+
+  const handleToggleTheme = () => {
+    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+  };
 
   // Default Filter: ONLY show usable coupons
   const [filters, setFilters] = useState<FilterState>({
@@ -107,8 +131,22 @@ export default function App() {
     });
 
     const unsubCoupons = CloudStorageService.subscribeToCoupons((cloudCoupons) => {
-      setCoupons(cloudCoupons);
-      StorageService.saveCoupons(cloudCoupons);
+      setCoupons((prev) => {
+        const cloudIds = new Set(cloudCoupons.map((c) => c.id));
+        // Keep all local coupons that haven't appeared in cloudCoupons yet
+        const unsyncedLocal = prev.filter((c) => !cloudIds.has(c.id));
+
+        // Background auto-sync for any local coupon not in cloud
+        unsyncedLocal.forEach((unsynced) => {
+          CloudStorageService.saveCoupon(unsynced).catch((err) => {
+            console.warn('Auto-sync unsynced coupon failed:', err);
+          });
+        });
+
+        const merged = [...unsyncedLocal, ...cloudCoupons];
+        StorageService.saveCoupons(merged);
+        return merged;
+      });
     });
 
     const unsubFamilies = CloudStorageService.subscribeToFamilies((cloudFamilies) => {
@@ -141,19 +179,32 @@ export default function App() {
       // 1. Owner of family
       if (f.ownerId === currentUser.id) return true;
       // 2. Member by ID
-      if (f.members.some((m) => m.userId === currentUser.id)) return true;
+      if (f.members && f.members.some((m) => m.userId === currentUser.id)) return true;
       // 3. Member by matching Email (case-insensitive)
       if (
         currentUser.email &&
+        f.members &&
         f.members.some(
           (m) => m.email && m.email.toLowerCase() === currentUser.email.toLowerCase()
         )
       ) {
         return true;
       }
+      // 4. Member who accepted an invite to this family
+      if (
+        currentUser.email &&
+        invites.some(
+          (inv) =>
+            inv.familyId === f.id &&
+            inv.status === 'accepted' &&
+            inv.invitedEmail.toLowerCase() === currentUser.email.toLowerCase()
+        )
+      ) {
+        return true;
+      }
       return false;
     });
-  }, [families, currentUser]);
+  }, [families, currentUser, invites]);
 
   // Ensure active family is valid and belongs to the authorized visibleFamilies
   useEffect(() => {
@@ -444,31 +495,64 @@ export default function App() {
   };
 
   // Handle Save (Add or Edit)
-  const handleSaveCoupon = (payload: Partial<Coupon>) => {
+  const handleSaveCoupon = async (payload: Partial<Coupon>) => {
+    if (!activeFamily) return;
     let savedCoupon: Coupon;
     if (editingCoupon) {
-      savedCoupon = { ...editingCoupon, ...payload } as Coupon;
+      savedCoupon = {
+        ...editingCoupon,
+        ...payload,
+        familyId: activeFamily.id,
+      } as Coupon;
       const updated = coupons.map((c) =>
         c.id === editingCoupon.id ? savedCoupon : c
       );
       setCoupons(updated);
       StorageService.saveCoupons(updated);
     } else {
+      const newId = payload.id || `coup-${Date.now()}`;
       savedCoupon = {
         ...(payload as Coupon),
-        id: `coup-${Date.now()}`,
+        id: newId,
+        familyId: activeFamily.id,
+        title: payload.title || '',
+        storeName: payload.storeName || '',
+        whereToUse: payload.whereToUse || payload.storeName || '',
+        initialValue: Number(payload.initialValue || 0),
+        currentValue: Number(payload.currentValue ?? payload.initialValue ?? 0),
+        currency: payload.currency || '₪',
+        category: payload.category || 'groceries',
+        createdBy: payload.createdBy || currentUser?.id || 'unknown',
+        createdByName: payload.createdByName || currentUser?.name || 'Member',
+        createdAt: payload.createdAt || new Date().toISOString(),
+        history: payload.history || [],
       };
       const updated = [savedCoupon, ...coupons];
       setCoupons(updated);
       StorageService.saveCoupons(updated);
     }
-    // Sync to Cloud Firestore
-    CloudStorageService.saveCoupon(savedCoupon);
 
+    // Safety: ensure any raw large image is compressed before sending to Firestore
+    if (savedCoupon.imageUrl && savedCoupon.imageUrl.length > 300000) {
+      try {
+        savedCoupon.imageUrl = await compressImage(savedCoupon.imageUrl, 1024, 1024, 0.75);
+      } catch (e) {
+        console.warn('Compress on save warning:', e);
+      }
+    }
+
+    // Close modals immediately
     setIsAddModalOpen(false);
     setIsQuickAddOpen(false);
     setEditingCoupon(null);
     setSelectedCoupon(null);
+
+    // Sync to Cloud Firestore immediately
+    try {
+      await CloudStorageService.saveCoupon(savedCoupon);
+    } catch (err) {
+      console.error('Failed to sync coupon to Firestore:', err);
+    }
   };
 
   // Handle Delete Coupon
@@ -581,7 +665,7 @@ export default function App() {
   };
 
   // Handle Accept Invite
-  const handleAcceptInvite = (inviteId: string) => {
+  const handleAcceptInvite = async (inviteId: string) => {
     if (!currentUser) return;
     const invite = invites.find((i) => i.id === inviteId);
     if (!invite) return;
@@ -589,17 +673,23 @@ export default function App() {
     let targetUpdatedFamily: Family | null = null;
     const updatedFamilies = families.map((fam) => {
       if (fam.id !== invite.familyId) return fam;
-      if (fam.members.some((m) => m.userId === currentUser.id)) return fam;
+      const alreadyMember = fam.members && fam.members.some(
+        (m) =>
+          m.userId === currentUser.id ||
+          (currentUser.email && m.email?.toLowerCase() === currentUser.email.toLowerCase())
+      );
+      if (alreadyMember) return fam;
       const updatedFam: Family = {
         ...fam,
         members: [
-          ...fam.members,
+          ...(fam.members || []),
           {
             userId: currentUser.id,
             name: currentUser.name,
             email: currentUser.email,
             role: 'member' as const,
             joinedAt: new Date().toISOString(),
+            avatarIcon: currentUser.avatarIcon,
           },
         ],
       };
@@ -618,9 +708,40 @@ export default function App() {
     StorageService.saveInvites(updatedInvites);
 
     if (targetUpdatedFamily) {
-      CloudStorageService.saveFamily(targetUpdatedFamily);
+      await CloudStorageService.saveFamily(targetUpdatedFamily);
+    } else {
+      // In case the family wasn't in local state yet, fetch directly and update
+      try {
+        const directFam = await CloudStorageService.getFamily(invite.familyId);
+        if (directFam) {
+          const alreadyMember = directFam.members && directFam.members.some(
+            (m) =>
+              m.userId === currentUser.id ||
+              (currentUser.email && m.email?.toLowerCase() === currentUser.email.toLowerCase())
+          );
+          if (!alreadyMember) {
+            const updatedFam: Family = {
+              ...directFam,
+              members: [
+                ...(directFam.members || []),
+                {
+                  userId: currentUser.id,
+                  name: currentUser.name,
+                  email: currentUser.email,
+                  role: 'member' as const,
+                  joinedAt: new Date().toISOString(),
+                  avatarIcon: currentUser.avatarIcon,
+                },
+              ],
+            };
+            await CloudStorageService.saveFamily(updatedFam);
+          }
+        }
+      } catch (e) {
+        console.warn('Direct family fetch/update error:', e);
+      }
     }
-    CloudStorageService.saveInvite(updatedInvite);
+    await CloudStorageService.saveInvite(updatedInvite);
 
     setActiveFamilyId(invite.familyId);
     StorageService.setActiveFamilyId(invite.familyId);
@@ -712,7 +833,7 @@ export default function App() {
 
   return (
     <div
-      className="min-h-screen bg-slate-50/70 text-slate-800 pb-20 selection:bg-blue-200"
+      className="min-h-screen bg-slate-50/70 dark:bg-slate-950 text-slate-800 dark:text-slate-100 pb-20 selection:bg-blue-200 dark:selection:bg-blue-900 transition-colors w-full max-w-full overflow-x-hidden"
       dir={isHe ? 'rtl' : 'ltr'}
     >
       {/* Header with authenticated user badge and Logout button */}
@@ -721,7 +842,9 @@ export default function App() {
         activeFamily={activeFamily}
         currentUser={currentUser}
         lang={lang}
+        theme={theme}
         onLanguageChange={setLang}
+        onToggleTheme={handleToggleTheme}
         onSelectFamily={handleSelectFamily}
         onLogout={handleLogout}
         onOpenAddCoupon={() => setIsAddModalOpen(true)}
@@ -974,6 +1097,8 @@ export default function App() {
         <UserSettingsModal
           currentUser={currentUser}
           lang={lang}
+          theme={theme}
+          onThemeChange={setTheme}
           isOpen={isUserSettingsOpen}
           onClose={() => setIsUserSettingsOpen(false)}
           onSaveUser={handleSaveUser}

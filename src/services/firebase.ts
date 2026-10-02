@@ -11,6 +11,7 @@ import {
   User as FirebaseUser,
 } from 'firebase/auth';
 import {
+  initializeFirestore,
   getFirestore,
   doc,
   collection,
@@ -28,8 +29,30 @@ import firebaseConfig from '../../firebase-applet-config.json';
 import { Coupon, Family, FamilyInvite, User } from '../types';
 
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+export const db = initializeFirestore(
+  app,
+  { ignoreUndefinedProperties: true },
+  firebaseConfig.firestoreDatabaseId
+);
 export const auth = getAuth(app);
+
+// Helper to remove any undefined fields before sending to Firestore
+export function cleanPayload<T>(obj: T): T {
+  if (obj === null || obj === undefined) return obj;
+  if (Array.isArray(obj)) {
+    return obj.map((item) => cleanPayload(item)) as unknown as T;
+  }
+  if (typeof obj === 'object') {
+    const cleaned: Record<string, any> = {};
+    for (const [key, value] of Object.entries(obj)) {
+      if (value !== undefined) {
+        cleaned[key] = cleanPayload(value);
+      }
+    }
+    return cleaned as T;
+  }
+  return obj;
+}
 
 const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({
@@ -262,6 +285,20 @@ export const CloudStorageService = {
     );
   },
 
+  // Get a single family directly by ID
+  async getFamily(familyId: string): Promise<Family | null> {
+    try {
+      const snap = await getDoc(doc(db, COLLECTIONS.FAMILIES, familyId));
+      if (snap.exists()) {
+        return snap.data() as Family;
+      }
+      return null;
+    } catch (err) {
+      console.warn('getFamily error:', err);
+      return null;
+    }
+  },
+
   // Real-time listener for invites
   subscribeToInvites(onUpdate: (invites: FamilyInvite[]) => void) {
     const colRef = collection(db, COLLECTIONS.INVITES);
@@ -284,8 +321,10 @@ export const CloudStorageService = {
   async saveCoupon(coupon: Coupon): Promise<void> {
     const path = `${COLLECTIONS.COUPONS}/${coupon.id}`;
     try {
-      await setDoc(doc(db, COLLECTIONS.COUPONS, coupon.id), coupon);
+      const sanitized = cleanPayload(coupon);
+      await setDoc(doc(db, COLLECTIONS.COUPONS, coupon.id), sanitized, { merge: true });
     } catch (err) {
+      console.error('saveCoupon Firestore error:', err);
       handleFirestoreError(err, OperationType.WRITE, path);
     }
   },
@@ -304,8 +343,10 @@ export const CloudStorageService = {
   async saveFamily(family: Family): Promise<void> {
     const path = `${COLLECTIONS.FAMILIES}/${family.id}`;
     try {
-      await setDoc(doc(db, COLLECTIONS.FAMILIES, family.id), family);
+      const sanitized = cleanPayload(family);
+      await setDoc(doc(db, COLLECTIONS.FAMILIES, family.id), sanitized, { merge: true });
     } catch (err) {
+      console.error('saveFamily Firestore error:', err);
       handleFirestoreError(err, OperationType.WRITE, path);
     }
   },
@@ -330,8 +371,10 @@ export const CloudStorageService = {
   async saveInvite(invite: FamilyInvite): Promise<void> {
     const path = `${COLLECTIONS.INVITES}/${invite.id}`;
     try {
-      await setDoc(doc(db, COLLECTIONS.INVITES, invite.id), invite);
+      const sanitized = cleanPayload(invite);
+      await setDoc(doc(db, COLLECTIONS.INVITES, invite.id), sanitized, { merge: true });
     } catch (err) {
+      console.error('saveInvite Firestore error:', err);
       handleFirestoreError(err, OperationType.WRITE, path);
     }
   },
@@ -340,8 +383,10 @@ export const CloudStorageService = {
   async saveUser(user: User): Promise<void> {
     const path = `${COLLECTIONS.USERS}/${user.id}`;
     try {
-      await setDoc(doc(db, COLLECTIONS.USERS, user.id), user, { merge: true });
+      const sanitized = cleanPayload(user);
+      await setDoc(doc(db, COLLECTIONS.USERS, user.id), sanitized, { merge: true });
     } catch (err) {
+      console.error('saveUser Firestore error:', err);
       handleFirestoreError(err, OperationType.WRITE, path);
     }
   },

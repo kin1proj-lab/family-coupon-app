@@ -1,4 +1,5 @@
 export type Language = 'en' | 'he';
+export type ThemeMode = 'light' | 'dark' | 'system';
 
 export type UserRole = 'owner' | 'member';
 

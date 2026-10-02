@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Coupon, CouponCategory, Family, Language, User } from '../types';
 import { getTranslation } from '../i18n/translations';
+import { compressImage } from '../utils/imageCompressor';
 
 interface QuickAddModalProps {
   existingCoupons: Coupon[];
@@ -69,12 +70,14 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
       .slice(0, 8); // Top 8 suggestions
   }, [existingCoupons]);
 
+  const [isCompressing, setIsCompressing] = useState(false);
+
   const handleSelectStore = (store: string) => {
     setStoreName(store);
     setError('');
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -83,13 +86,22 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const result = event.target?.result as string;
-      setImageUrl(result);
-      setError('');
-    };
-    reader.readAsDataURL(file);
+    setIsCompressing(true);
+    setError('');
+    try {
+      const compressed = await compressImage(file, 1024, 1024, 0.75);
+      setImageUrl(compressed);
+    } catch (err) {
+      console.warn('Compression fallback to FileReader:', err);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setImageUrl(event.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    } finally {
+      setIsCompressing(false);
+      e.target.value = '';
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {

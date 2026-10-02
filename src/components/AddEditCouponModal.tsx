@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { Coupon, CouponCategory, Family, Language, User } from '../types';
 import { getTranslation } from '../i18n/translations';
+import { compressImage } from '../utils/imageCompressor';
 
 interface AddEditCouponModalProps {
   coupon?: Coupon | null;
@@ -62,6 +63,7 @@ export const AddEditCouponModal: React.FC<AddEditCouponModalProps> = ({
   const [category, setCategory] = useState<CouponCategory>(coupon?.category || 'groceries');
   const [terms, setTerms] = useState(coupon?.terms || '');
   const [error, setError] = useState('');
+  const [isCompressing, setIsCompressing] = useState(false);
 
   if (!isOpen) return null;
 
@@ -70,7 +72,7 @@ export const AddEditCouponModal: React.FC<AddEditCouponModalProps> = ({
     setExpirationDate(d.toISOString().split('T')[0]);
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -79,13 +81,23 @@ export const AddEditCouponModal: React.FC<AddEditCouponModalProps> = ({
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const result = event.target?.result as string;
-      setImageUrl(result);
-      setError('');
-    };
-    reader.readAsDataURL(file);
+    setIsCompressing(true);
+    setError('');
+    try {
+      const compressed = await compressImage(file, 1024, 1024, 0.75);
+      setImageUrl(compressed);
+    } catch (err) {
+      console.warn('Compression fallback to FileReader:', err);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setImageUrl(event.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    } finally {
+      setIsCompressing(false);
+      // Reset input value so the user can re-select the same file if needed
+      e.target.value = '';
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -119,16 +131,16 @@ export const AddEditCouponModal: React.FC<AddEditCouponModalProps> = ({
       title: title.trim(),
       storeName: storeName.trim(),
       whereToUse: whereToUse.trim() || storeName.trim(),
-      code: code.trim() || undefined,
-      pin: pin.trim() || undefined,
-      imageUrl: imageUrl.trim() || undefined,
+      code: code.trim() || '',
+      pin: pin.trim() || '',
+      imageUrl: imageUrl.trim() || '',
       barcodeType: code.trim() ? barcodeType : 'NONE',
       initialValue: Number(initialValue),
       currentValue: isEditing ? Number(currentValue) : Number(initialValue),
       currency,
       expirationDate: expirationDate || null,
       category,
-      terms: terms.trim() || undefined,
+      terms: terms.trim() || '',
       createdBy: coupon?.createdBy || currentUser.id,
       createdByName: coupon?.createdByName || currentUser.name,
       createdAt: coupon?.createdAt || new Date().toISOString(),
